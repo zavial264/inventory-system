@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { fail, ok, type ActionResult } from "@/lib/action-result";
@@ -22,17 +21,14 @@ export async function signInAction(
   });
 
   if (error) {
-    // Deliberately vague: never reveal whether the address has an account.
     return fail("Those details did not match an account");
   }
 
-  revalidatePath("/", "layout");
   return ok({ redirectTo: "/tracking" });
 }
 
 export async function signOutAction() {
   const supabase = await createClient();
   await supabase.auth.signOut();
-  revalidatePath("/", "layout");
   redirect("/login");
 }
