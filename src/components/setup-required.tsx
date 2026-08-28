@@ -11,7 +11,7 @@ const steps = [
   },
   {
     title: "Add your credentials",
-    body: "Copy .env.example to .env.local, then fill in NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY from Project Settings → API.",
+    body: "Copy .env.example to .env.local, then fill in SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY from Project Settings → API.",
   },
   {
     title: "Restart the dev server",

@@ -29,7 +29,9 @@ In Supabase, go to Authentication → Users → Add user, and create one with an
 cp .env.example .env.local
 ```
 
-Fill in `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from Project Settings → API. Older projects call that second value the "anon public" key and name it `NEXT_PUBLIC_SUPABASE_ANON_KEY`; either variable works.
+Fill in `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` from Project Settings → API. Older projects call that second value the "anon public" key; set it as `SUPABASE_ANON_KEY` and that works too.
+
+Neither variable is prefixed with `NEXT_PUBLIC_`, because every Supabase call happens on the server. Adding the prefix would ship the credentials to the browser for no benefit.
 
 ### 4. Run it
 

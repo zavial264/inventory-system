@@ -27,7 +27,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full">
+      {/* Extensions such as Grammarly add attributes to body before hydration. */}
+      <body className="min-h-full" suppressHydrationWarning>
         <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
         <Toaster position="bottom-right" richColors closeButton />
       </body>

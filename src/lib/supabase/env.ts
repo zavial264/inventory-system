@@ -1,29 +1,36 @@
 /**
- * Supabase renamed the anon key to the "publishable key". Newer projects only
- * show the new name in the dashboard, older ones still show the old one, so
- * both are accepted.
+ * Read on the server only: Server Components, Server Actions, and the proxy.
+ * Nothing in the browser talks to Supabase directly, so the unprefixed names
+ * are preferred and keep the credentials out of the client bundle. The
+ * NEXT_PUBLIC_ spellings still work so existing setups don't break.
  *
- * Each variable is referenced literally because Next inlines `NEXT_PUBLIC_*`
- * by exact text match when building the client bundle.
+ * Supabase also renamed the anon key to the "publishable key", so both of
+ * those names are accepted too.
  */
+function readUrl() {
+  return process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+}
+
 function readKey() {
   return (
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   );
 }
 
 export function isSupabaseConfigured() {
-  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && readKey());
+  return Boolean(readUrl() && readKey());
 }
 
 export function getSupabaseEnv() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const url = readUrl();
   const anonKey = readKey();
 
   if (!url || !anonKey) {
     throw new Error(
-      "Supabase is not configured. Copy .env.example to .env.local and fill in NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY.",
+      "Supabase is not configured. Copy .env.example to .env.local and fill in SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY.",
     );
   }
 
