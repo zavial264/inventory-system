@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Loader2Icon } from "lucide-react";
@@ -12,7 +11,6 @@ import { signInAction } from "@/lib/data/auth-actions";
 import { loginSchema, type LoginInput } from "@/lib/schemas";
 
 export function LoginForm({ nextPath }: { nextPath?: string }) {
-  const router = useRouter();
   const {
     register,
     handleSubmit,
@@ -31,8 +29,7 @@ export function LoginForm({ nextPath }: { nextPath?: string }) {
       return;
     }
 
-    router.replace(nextPath ?? result.data.redirectTo);
-    router.refresh();
+    window.location.assign(nextPath ?? result.data.redirectTo);
   };
 
   return (
