@@ -25,12 +25,6 @@ import {
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
-import { LoadingState } from "@/components/ui/loading-state";
-import {
-  fetchAssignmentHistoryAction,
-  reverseCompletionAction,
-} from "@/lib/data/actions";
-import type { AssignmentHistory } from "@/lib/data/queries";
 import { formatDate } from "@/lib/format";
 import { reversalSchema, type ReversalInput } from "@/lib/schemas";
 import { useInventory } from "@/lib/store/inventory-provider";
@@ -45,45 +39,6 @@ type TimelineItem = {
   receipted: boolean;
 };
 
-function buildTimeline(
-  assignmentId: string,
-  history: AssignmentHistory,
-): TimelineItem[] {
-  const completions = history.completionEntries.map<TimelineItem>((entry) => ({
-    id: entry.id,
-    at: entry.createdAt,
-    kind: entry.quantity < 0 ? "reversal" : "completion",
-    title:
-      entry.quantity < 0
-        ? `${Math.abs(entry.quantity)} pieces reversed`
-        : `${entry.quantity} pieces completed`,
-    detail: entry.receiptId
-      ? [
-          entry.note,
-          `On receipt ${history.receiptNumbers[entry.receiptId] ?? ""}`,
-        ]
-          .filter(Boolean)
-          .join(" · ")
-      : entry.note,
-    receipted: Boolean(entry.receiptId),
-  }));
-
-  const adjustments = history.adjustments
-    .filter((item) => item.assignmentId === assignmentId)
-    .map<TimelineItem>((item) => ({
-      id: item.id,
-      at: item.createdAt,
-      kind: "adjustment",
-      title: `Assigned raised from ${item.previousQuantity} to ${item.newQuantity}`,
-      detail: item.reason,
-      receipted: false,
-    }));
-
-  return [...completions, ...adjustments].sort((a, b) =>
-    b.at.localeCompare(a.at),
-  );
-}
-
 export function HistoryDialog({
   assignmentId,
   open,
@@ -93,12 +48,10 @@ export function HistoryDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { assignmentViews } = useInventory();
+  const { state, assignmentViews, reverseCompletion } = useInventory();
   const assignment: AssignmentView | null =
     assignmentViews.find((view) => view.id === assignmentId) ?? null;
   const [reversing, setReversing] = React.useState(false);
-  const [history, setHistory] = React.useState<AssignmentHistory | null>(null);
-  const [loadedFor, setLoadedFor] = React.useState<string | null>(null);
 
   const {
     register,
@@ -111,43 +64,59 @@ export function HistoryDialog({
     defaultValues: { quantity: 1, reason: "" },
   });
 
-  const loadHistory = React.useCallback(async (id: string) => {
-    const result = await fetchAssignmentHistoryAction(id);
-    if (result.ok) {
-      setHistory(result.data);
-      setLoadedFor(id);
-    } else {
-      toast.error(result.error);
-      setHistory(null);
-      setLoadedFor(null);
-    }
-  }, []);
-
   const handleOpenChange = (next: boolean) => {
     if (!next) {
       setReversing(false);
-      setHistory(null);
-      setLoadedFor(null);
       reset({ quantity: 1, reason: "" });
     }
     onOpenChange(next);
   };
 
-  React.useEffect(() => {
-    if (!open || !assignmentId) return;
-    // Data loads when the dialog opens for a new line.
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-open
-    void loadHistory(assignmentId);
-  }, [open, assignmentId, loadHistory]);
+  const timeline = React.useMemo<TimelineItem[]>(() => {
+    if (!assignment) return [];
 
-  const loading = Boolean(open && assignmentId && loadedFor !== assignmentId);
+    const receiptNoById = new Map(
+      state.receipts.map((receipt) => [receipt.id, receipt.receiptNo]),
+    );
 
-  const timeline = history && assignment ? buildTimeline(assignment.id, history) : [];
+    const completions = state.completionEntries
+      .filter((entry) => entry.assignmentId === assignment.id)
+      .map<TimelineItem>((entry) => ({
+        id: entry.id,
+        at: entry.createdAt,
+        kind: entry.quantity < 0 ? "reversal" : "completion",
+        title:
+          entry.quantity < 0
+            ? `${Math.abs(entry.quantity)} pieces reversed`
+            : `${entry.quantity} pieces completed`,
+        detail: entry.receiptId
+          ? [entry.note, `On receipt ${receiptNoById.get(entry.receiptId) ?? ""}`]
+              .filter(Boolean)
+              .join(" · ")
+          : entry.note,
+        receipted: Boolean(entry.receiptId),
+      }));
+
+    const adjustments = state.adjustments
+      .filter((item) => item.assignmentId === assignment.id)
+      .map<TimelineItem>((item) => ({
+        id: item.id,
+        at: item.createdAt,
+        kind: "adjustment",
+        title: `Assigned raised from ${item.previousQuantity} to ${item.newQuantity}`,
+        detail: item.reason,
+        receipted: false,
+      }));
+
+    return [...completions, ...adjustments].sort((a, b) =>
+      b.at.localeCompare(a.at),
+    );
+  }, [assignment, state.completionEntries, state.adjustments, state.receipts]);
 
   if (!assignment) return null;
 
   const onSubmit = async (values: ReversalInput) => {
-    const result = await reverseCompletionAction(assignment.id, values);
+    const result = await reverseCompletion(assignment.id, values);
     if (!result.ok) {
       setError("quantity", { message: result.error });
       return;
@@ -156,7 +125,6 @@ export function HistoryDialog({
     toast.success(`${values.quantity} pieces reversed`);
     setReversing(false);
     reset({ quantity: 1, reason: "" });
-    await loadHistory(assignment.id);
   };
 
   const iconFor = (kind: TimelineItem["kind"]) => {
@@ -178,9 +146,7 @@ export function HistoryDialog({
         <AssignmentSummary assignment={assignment} />
 
         <div className="max-h-72 overflow-y-auto pr-1">
-          {loading ? (
-            <LoadingState rows={3} />
-          ) : timeline.length === 0 ? (
+          {timeline.length === 0 ? (
             <EmptyState
               icon={HistoryIcon}
               title="Nothing recorded yet"
@@ -285,7 +251,7 @@ export function HistoryDialog({
                 type="button"
                 variant="outline"
                 onClick={() => setReversing(true)}
-                disabled={assignment.completedQuantity <= 0 || loading}
+                disabled={assignment.completedQuantity <= 0}
               >
                 <Undo2Icon />
                 Reverse a completion

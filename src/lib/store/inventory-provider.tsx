@@ -13,7 +13,7 @@ import {
   topUpAssignmentAction,
   updateEmployeeAction,
 } from "@/lib/data/actions";
-import type { CoreSnapshot } from "@/lib/data/queries";
+import type { InventorySnapshot } from "@/lib/data/queries";
 import { groupByEmployee } from "@/lib/derive";
 import type {
   AssignmentInput,
@@ -24,7 +24,9 @@ import type {
 } from "@/lib/schemas";
 import type {
   ArticleType,
+  AssignmentAdjustment,
   AssignmentView,
+  CompletionEntry,
   Employee,
   EmployeeGroup,
   Receipt,
@@ -34,6 +36,9 @@ type InventoryContextValue = {
   state: {
     employees: Employee[];
     articleTypes: ArticleType[];
+    completionEntries: CompletionEntry[];
+    adjustments: AssignmentAdjustment[];
+    receipts: Receipt[];
   };
   assignmentViews: AssignmentView[];
   employeeGroups: EmployeeGroup[];
@@ -70,7 +75,7 @@ export function InventoryProvider({
   snapshot,
   children,
 }: {
-  snapshot: CoreSnapshot;
+  snapshot: InventorySnapshot;
   children: React.ReactNode;
 }) {
   const value = React.useMemo<InventoryContextValue>(
@@ -78,6 +83,9 @@ export function InventoryProvider({
       state: {
         employees: snapshot.employees,
         articleTypes: snapshot.articleTypes,
+        completionEntries: snapshot.completionEntries,
+        adjustments: snapshot.adjustments,
+        receipts: snapshot.receipts,
       },
       assignmentViews: snapshot.assignments,
       employeeGroups: groupByEmployee(snapshot.assignments),

@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
 import { ScissorsIcon } from "lucide-react";
-import { redirect } from "next/navigation";
 
 import { LoginForm } from "@/components/auth/login-form";
 import { SetupRequired } from "@/components/setup-required";
-import { getAuthUser } from "@/lib/data/auth";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 export const metadata: Metadata = {
@@ -21,9 +19,6 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
     typeof next === "string" && next.startsWith("/") && !next.startsWith("//")
       ? next
       : undefined;
-
-  const user = await getAuthUser();
-  if (user) redirect(nextPath ?? "/tracking");
 
   return (
     <div className="flex min-h-svh items-center justify-center bg-muted/40 px-4 py-12">
