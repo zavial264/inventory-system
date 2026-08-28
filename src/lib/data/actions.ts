@@ -5,6 +5,10 @@ import { revalidatePath } from "next/cache";
 import { describeDbError, fail, ok, type ActionResult } from "@/lib/action-result";
 import { toEmployee, toReceipt } from "@/lib/data/mappers";
 import {
+  getAssignmentHistory,
+  type AssignmentHistory,
+} from "@/lib/data/queries";
+import {
   assignmentSchema,
   completionSchema,
   employeeSchema,
@@ -267,4 +271,17 @@ export async function generateReceiptAction(
 
   refresh();
   return ok(toReceipt(data));
+}
+
+export async function fetchAssignmentHistoryAction(
+  assignmentId: string,
+): Promise<ActionResult<AssignmentHistory>> {
+  try {
+    const history = await getAssignmentHistory(assignmentId);
+    return ok(history);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Could not load line history";
+    return fail(message);
+  }
 }

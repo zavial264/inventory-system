@@ -1,6 +1,3 @@
-"use client";
-
-import * as React from "react";
 import Link from "next/link";
 import { PrinterIcon, ReceiptTextIcon } from "lucide-react";
 
@@ -15,11 +12,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/format";
-import { useInventory } from "@/lib/store/inventory-provider";
+import type { Receipt } from "@/lib/types";
 
-export function ReceiptsTable() {
-  const { state } = useInventory();
-  const receipts = state.receipts;
+export function ReceiptsTable({ receipts }: { receipts: Receipt[] }) {
 
   if (receipts.length === 0) {
     return (
