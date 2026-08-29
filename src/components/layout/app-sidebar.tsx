@@ -2,35 +2,42 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOutIcon, ScissorsIcon } from "lucide-react";
+import { LogOutIcon } from "lucide-react";
 
-import { navItems } from "@/components/layout/nav-items";
+import { navItemsForRole } from "@/components/layout/nav-items";
 import { signOutAction } from "@/lib/data/auth-actions";
+import { BRAND } from "@/lib/brand";
 import { initialsOf } from "@/lib/format";
+import { APP_ROLE_LABELS, type AppRole } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-export function AppSidebar({ userEmail }: { userEmail: string }) {
+export function AppSidebar({
+  userEmail,
+  userRole,
+}: {
+  userEmail: string;
+  userRole: AppRole;
+}) {
   const pathname = usePathname();
+  const items = navItemsForRole(userRole);
 
   return (
     // Pinned to the viewport with its own height so the page can scroll past it.
     <aside className="sticky top-0 hidden h-svh w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar lg:flex">
       <div className="flex shrink-0 items-center gap-3 px-5 py-5">
-        <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <ScissorsIcon className="size-4.5" />
+        <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
+          {BRAND.initials}
         </span>
         <span className="flex flex-col leading-tight">
           <span className="text-sm font-semibold text-sidebar-foreground">
-            Boutique
+            {BRAND.name}
           </span>
-          <span className="text-xs text-muted-foreground">
-            Stitching Inventory
-          </span>
+          <span className="text-xs text-muted-foreground">{BRAND.tagline}</span>
         </span>
       </div>
 
       <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 py-2">
-        {navItems.map((item) => {
+        {items.map((item) => {
           const active =
             pathname === item.href || pathname.startsWith(`${item.href}/`);
 
@@ -69,7 +76,9 @@ export function AppSidebar({ userEmail }: { userEmail: string }) {
             {initialsOf(userEmail.split("@")[0] ?? "Admin")}
           </span>
           <span className="flex min-w-0 flex-1 flex-col leading-tight">
-            <span className="truncate text-sm font-medium">Admin</span>
+            <span className="truncate text-sm font-medium">
+              {APP_ROLE_LABELS[userRole]}
+            </span>
             <span className="truncate text-xs text-muted-foreground">
               {userEmail}
             </span>
@@ -89,19 +98,20 @@ export function AppSidebar({ userEmail }: { userEmail: string }) {
   );
 }
 
-export function MobileNav() {
+export function MobileNav({ userRole }: { userRole: AppRole }) {
   const pathname = usePathname();
+  const items = navItemsForRole(userRole);
 
   return (
     <div className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur lg:hidden">
       <div className="flex items-center gap-2 px-4 py-3">
-        <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <ScissorsIcon className="size-4" />
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
+          {BRAND.initials}
         </span>
-        <span className="text-sm font-semibold">Boutique Inventory</span>
+        <span className="text-sm font-semibold">{BRAND.name}</span>
       </div>
       <nav className="flex gap-1 overflow-x-auto px-3 pb-2">
-        {navItems.map((item) => {
+        {items.map((item) => {
           const active =
             pathname === item.href || pathname.startsWith(`${item.href}/`);
 

@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { ReceiptsTable } from "@/components/receipts/receipts-table";
 
 export const metadata: Metadata = {
-  title: "Receipts · Boutique Inventory",
+  title: "Receipts",
 };
 
 export default function ReceiptsPage() {

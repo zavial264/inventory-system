@@ -4,7 +4,7 @@ import { EmployeesTable } from "@/components/employees/employees-table";
 import { PageHeader } from "@/components/layout/page-header";
 
 export const metadata: Metadata = {
-  title: "Employees · Boutique Inventory",
+  title: "Employees",
 };
 
 export default function EmployeesPage() {

@@ -3,8 +3,9 @@
 -- Paste this whole file into the Supabase SQL Editor and run it once.
 -- It is written to be re-runnable: existing objects are left alone.
 --
--- Access model for v1: every authenticated user is an admin. Anonymous users
--- get nothing. Tighten this when a second role appears.
+-- Access model: authenticated users with an app_users row get Admin or Super
+-- Admin capabilities. Anonymous users get nothing. Super Admin alone can
+-- mutate article_types from the app.
 
 create extension if not exists pgcrypto;
 
@@ -17,12 +18,26 @@ begin
   if not exists (select 1 from pg_type where typname = 'article_size') then
     create type public.article_size as enum ('S', 'M', 'L', 'XL');
   end if;
+  if not exists (select 1 from pg_type where typname = 'app_role') then
+    create type public.app_role as enum ('admin', 'super_admin');
+  end if;
 end
 $$;
 
 -- ---------------------------------------------------------------------------
 -- Tables
 -- ---------------------------------------------------------------------------
+
+create table if not exists public.app_users (
+  id uuid primary key references auth.users (id) on delete cascade,
+  role public.app_role not null default 'admin',
+  invited_by uuid references auth.users (id) on delete set null,
+  invited_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+alter table public.app_users add column if not exists invited_by uuid references auth.users (id) on delete set null;
+alter table public.app_users add column if not exists invited_at timestamptz;
 
 create table if not exists public.employees (
   id uuid primary key default gen_random_uuid(),
@@ -406,8 +421,62 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
+-- Roles: one row per Auth user; Super Admin is assigned in SQL
+-- ---------------------------------------------------------------------------
+
+create or replace function public.current_app_role()
+returns public.app_role
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    (select role from public.app_users where id = auth.uid()),
+    'admin'::public.app_role
+  );
+$$;
+
+create or replace function public.is_super_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.current_app_role() = 'super_admin'::public.app_role;
+$$;
+
+create or replace function public.handle_new_auth_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.app_users (id, role)
+  values (new.id, 'admin')
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_auth_user();
+
+-- Backfill app_users for Auth accounts created before this migration ran.
+insert into public.app_users (id, role)
+select id, 'admin'::public.app_role
+from auth.users
+on conflict (id) do nothing;
+
+-- ---------------------------------------------------------------------------
 -- Row Level Security
 -- ---------------------------------------------------------------------------
+
+alter table public.app_users enable row level security;
 
 alter table public.employees enable row level security;
 alter table public.article_types enable row level security;
@@ -415,6 +484,20 @@ alter table public.assignments enable row level security;
 alter table public.completion_entries enable row level security;
 alter table public.assignment_adjustments enable row level security;
 alter table public.receipts enable row level security;
+
+drop policy if exists app_users_read_own on public.app_users;
+create policy app_users_read_own on public.app_users
+  for select to authenticated using (id = auth.uid());
+
+drop policy if exists app_users_super_admin_read on public.app_users;
+create policy app_users_super_admin_read on public.app_users
+  for select to authenticated using (public.is_super_admin());
+
+drop policy if exists app_users_super_admin_update on public.app_users;
+create policy app_users_super_admin_update on public.app_users
+  for update to authenticated
+  using (public.is_super_admin())
+  with check (public.is_super_admin());
 
 do $$
 declare
@@ -438,11 +521,21 @@ begin
 end
 $$;
 
--- Rates are maintained in the Supabase dashboard, never from the app, so the
--- app's key gets read access only.
+-- article_types: everyone reads; only Super Admin writes from the app.
 drop policy if exists article_types_read on public.article_types;
 create policy article_types_read on public.article_types
   for select to authenticated using (true);
+
+drop policy if exists article_types_super_admin_insert on public.article_types;
+create policy article_types_super_admin_insert on public.article_types
+  for insert to authenticated
+  with check (public.is_super_admin());
+
+drop policy if exists article_types_super_admin_update on public.article_types;
+create policy article_types_super_admin_update on public.article_types
+  for update to authenticated
+  using (public.is_super_admin())
+  with check (public.is_super_admin());
 
 revoke all on public.assignment_progress from anon;
 grant select on public.assignment_progress to authenticated;

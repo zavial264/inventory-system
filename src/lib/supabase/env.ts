@@ -36,3 +36,11 @@ export function getSupabaseEnv() {
 
   return { url, anonKey };
 }
+
+export function getServiceRoleKey() {
+  return process.env.SUPABASE_SERVICE_ROLE_KEY;
+}
+
+export function isServiceRoleConfigured() {
+  return Boolean(getServiceRoleKey());
+}

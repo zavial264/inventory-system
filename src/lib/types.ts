@@ -1,6 +1,23 @@
 export const SIZES = ["S", "M", "L", "XL"] as const;
 export type Size = (typeof SIZES)[number];
 
+export const APP_ROLES = ["admin", "super_admin"] as const;
+export type AppRole = (typeof APP_ROLES)[number];
+
+export const APP_ROLE_LABELS: Record<AppRole, string> = {
+  admin: "Admin",
+  super_admin: "Super Admin",
+};
+
+export type PlatformUser = {
+  id: string;
+  email: string;
+  role: AppRole;
+  invitedAt: string | null;
+  createdAt: string;
+  lastSignInAt: string | null;
+};
+
 export type Employee = {
   id: string;
   name: string;

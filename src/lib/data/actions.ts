@@ -3,13 +3,16 @@
 import { revalidatePath } from "next/cache";
 
 import { describeDbError, fail, ok, type ActionResult } from "@/lib/action-result";
-import { toEmployee, toReceipt } from "@/lib/data/mappers";
+import { requireSuperAdmin } from "@/lib/auth/roles";
+import { toEmployee, toReceipt, toArticleType } from "@/lib/data/mappers";
 import {
+  articleSchema,
   assignmentSchema,
   completionSchema,
   employeeSchema,
   reversalSchema,
   topUpSchema,
+  type ArticleInput,
   type AssignmentInput,
   type CompletionInput,
   type EmployeeInput,
@@ -17,7 +20,7 @@ import {
   type TopUpInput,
 } from "@/lib/schemas";
 import { createClient } from "@/lib/supabase/server";
-import type { Employee, Receipt } from "@/lib/types";
+import type { ArticleType, Employee, Receipt } from "@/lib/types";
 
 function refresh() {
   revalidatePath("/", "layout");
@@ -111,6 +114,108 @@ export async function setEmployeeActiveAction(
 
   const { error } = await supabase
     .from("employees")
+    .update({ is_active: isActive })
+    .eq("id", id);
+
+  if (error) return fail(describeDbError(error));
+
+  refresh();
+  return ok(undefined);
+}
+
+export async function createArticleTypeAction(
+  input: ArticleInput,
+): Promise<ActionResult<ArticleType>> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return fail(gate.error);
+
+  const parsed = articleSchema.safeParse(input);
+  if (!parsed.success) return fail(firstIssue(parsed.error));
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("article_types")
+    .insert({
+      name: parsed.data.name.trim(),
+      stitching_price: parsed.data.stitchingPrice,
+    })
+    .select("*")
+    .single();
+
+  if (error) {
+    return fail(
+      error.code === "23505"
+        ? "An article with this name already exists"
+        : describeDbError(error),
+    );
+  }
+
+  refresh();
+  return ok(toArticleType(data));
+}
+
+export async function updateArticleTypeAction(
+  id: string,
+  input: ArticleInput,
+): Promise<ActionResult> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return fail(gate.error);
+
+  const parsed = articleSchema.safeParse(input);
+  if (!parsed.success) return fail(firstIssue(parsed.error));
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("article_types")
+    .update({
+      name: parsed.data.name.trim(),
+      stitching_price: parsed.data.stitchingPrice,
+    })
+    .eq("id", id);
+
+  if (error) {
+    return fail(
+      error.code === "23505"
+        ? "An article with this name already exists"
+        : describeDbError(error),
+    );
+  }
+
+  refresh();
+  return ok(undefined);
+}
+
+export async function setArticleTypeActiveAction(
+  id: string,
+  isActive: boolean,
+): Promise<ActionResult> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return fail(gate.error);
+
+  const supabase = await createClient();
+
+  if (!isActive) {
+    const { data, error } = await supabase
+      .from("assignment_progress")
+      .select("remaining_quantity")
+      .eq("article_type_id", id);
+
+    if (error) return fail(describeDbError(error));
+
+    const remaining = (data ?? []).reduce(
+      (total, row) => total + row.remaining_quantity,
+      0,
+    );
+
+    if (remaining > 0) {
+      return fail(
+        `Cannot deactivate: ${remaining} piece${remaining === 1 ? "" : "s"} still pending on this article`,
+      );
+    }
+  }
+
+  const { error } = await supabase
+    .from("article_types")
     .update({ is_active: isActive })
     .eq("id", id);
 
