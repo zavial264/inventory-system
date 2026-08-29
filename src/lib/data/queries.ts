@@ -7,6 +7,12 @@ import {
   toEmployee,
   toReceipt,
 } from "@/lib/data/mappers";
+import {
+  ensureFreshSession,
+  failQuery,
+  isClockSkewError,
+  withClockSkewRetry,
+} from "@/lib/supabase/clock-skew";
 import { createClient } from "@/lib/supabase/server";
 import type {
   ArticleType,
@@ -25,13 +31,6 @@ export type InventorySnapshot = {
   adjustments: AssignmentAdjustment[];
   receipts: Receipt[];
 };
-
-function failed(label: string, message: string): never {
-  throw new Error(`Could not load ${label}: ${message}`);
-}
-
-/** Sub-second skew between Auth and Postgres right after sign-in. */
-const CLOCK_SKEW = /issued at future/i;
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
@@ -58,25 +57,36 @@ function fetchSnapshotTables(supabase: Client) {
   ]);
 }
 
-export async function getInventorySnapshot(): Promise<InventorySnapshot> {
-  let supabase = await createClient();
-  let results = await fetchSnapshotTables(supabase);
+function hasClockSkewError(
+  results: Awaited<ReturnType<typeof fetchSnapshotTables>>,
+) {
+  return results.some(
+    (result) => result.error && isClockSkewError(result.error.message),
+  );
+}
 
-  if (results.some((r) => r.error && CLOCK_SKEW.test(r.error.message))) {
-    await new Promise((resolve) => setTimeout(resolve, 1_500));
-    supabase = await createClient();
-    results = await fetchSnapshotTables(supabase);
-  }
+export async function getInventorySnapshot(
+  client?: Client,
+): Promise<InventorySnapshot> {
+  const supabase = client ?? (await createClient());
+
+  const results = await withClockSkewRetry(
+    async () => {
+      await ensureFreshSession(supabase);
+      return fetchSnapshotTables(supabase);
+    },
+    hasClockSkewError,
+  );
 
   const [employees, articleTypes, progress, completions, adjustments, receipts] =
     results;
 
-  if (employees.error) failed("employees", employees.error.message);
-  if (articleTypes.error) failed("articles", articleTypes.error.message);
-  if (progress.error) failed("assignments", progress.error.message);
-  if (completions.error) failed("completions", completions.error.message);
-  if (adjustments.error) failed("adjustments", adjustments.error.message);
-  if (receipts.error) failed("receipts", receipts.error.message);
+  if (employees.error) failQuery("employees", employees.error.message);
+  if (articleTypes.error) failQuery("articles", articleTypes.error.message);
+  if (progress.error) failQuery("assignments", progress.error.message);
+  if (completions.error) failQuery("completions", completions.error.message);
+  if (adjustments.error) failQuery("adjustments", adjustments.error.message);
+  if (receipts.error) failQuery("receipts", receipts.error.message);
 
   const employeeList = (employees.data ?? []).map(toEmployee);
   const articleList = (articleTypes.data ?? []).map(toArticleType);
@@ -122,12 +132,15 @@ export async function getInventorySnapshot(): Promise<InventorySnapshot> {
 
 export async function getReceipt(id: string): Promise<Receipt | null> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("receipts")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
 
-  if (error) failed("receipt", error.message);
+  const { data, error } = await withClockSkewRetry(
+    async () => {
+      await ensureFreshSession(supabase);
+      return supabase.from("receipts").select("*").eq("id", id).maybeSingle();
+    },
+    (result) => Boolean(result.error && isClockSkewError(result.error.message)),
+  );
+
+  if (error) failQuery("receipt", error.message);
   return data ? toReceipt(data) : null;
 }

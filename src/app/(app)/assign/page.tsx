@@ -4,7 +4,7 @@ import { AssignmentForm } from "@/components/assign/assignment-form";
 import { PageHeader } from "@/components/layout/page-header";
 
 export const metadata: Metadata = {
-  title: "Assign Work · Boutique Inventory",
+  title: "Assign Work",
 };
 
 export default async function AssignPage({

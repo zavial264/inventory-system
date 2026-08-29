@@ -30,6 +30,16 @@ type ArticleTypeRow = {
   created_at: string;
 };
 
+type AppUserRow = {
+  id: string;
+  role: AppRole;
+  invited_by: string | null;
+  invited_at: string | null;
+  created_at: string;
+};
+
+type AppRole = "admin" | "super_admin";
+
 type AssignmentRow = {
   id: string;
   employee_id: string;
@@ -80,6 +90,13 @@ type AssignmentProgressRow = AssignmentRow & {
 export type Database = {
   public: {
     Tables: {
+      app_users: {
+        Row: AppUserRow;
+        Insert: Partial<Pick<AppUserRow, "created_at">> &
+          Pick<AppUserRow, "id"> & { role?: AppRole };
+        Update: Partial<AppUserRow>;
+        Relationships: [];
+      };
       employees: {
         Row: EmployeeRow;
         Insert: Partial<Pick<EmployeeRow, "id" | "is_active" | "created_at">> &
@@ -151,6 +168,7 @@ export type Database = {
       };
     };
     Enums: {
+      app_role: AppRole;
       article_size: ArticleSize;
     };
     CompositeTypes: Record<never, never>;

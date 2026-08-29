@@ -1,7 +1,7 @@
 # Boutique Inventory System — Product Requirements Document
 
-- **Version:** 0.1 (Draft)
-- **Last updated:** 27 Aug 2026
+- **Version:** 0.2 (Draft)
+- **Last updated:** 29 Aug 2026
 - **Owner:** Product owner (boutique admin)
 - **Status:** Approved scope for v1 build
 
@@ -46,16 +46,34 @@ A boutique distributes cut fabric pieces to stitching employees (tailors) and cu
 
 ## 4. Users and Roles
 
-| Role | v1 capability |
-| --- | --- |
-| Admin | Full access: manage employees, create assignments, record completions, generate receipts |
+Authentication is Supabase Auth (email + password). All application routes are protected; unauthenticated visitors are redirected to `/login`. Each signed-in user has exactly one application role, stored in `app_users.role`.
 
-Only the Admin role exists in v1. Authentication is Supabase Auth (email + password). All application routes are protected; unauthenticated visitors are redirected to `/login`.
+| Capability | Admin | Super Admin |
+| --- | --- | --- |
+| Assign work (`/assign`) | ✓ | ✓ |
+| Track progress and record completions (`/tracking`) | ✓ | ✓ |
+| Top up open assignment lines | ✓ | ✓ |
+| Reverse completion entries | ✓ | ✓ |
+| Generate and re-print receipts | ✓ | ✓ |
+| Manage employees (`/employees`) | ✓ | ✓ |
+| View article catalogue and rates (`/articles`) | ✓ (read-only) | ✓ |
+| Add new article types | — | ✓ |
+| Edit stitching rates | — | ✓ |
+| Deactivate / reactivate article types | — | ✓ |
+| View platform users (`/users`) | — | ✓ |
+| Create new Admin users (`/users`) | — | ✓ |
+| Change another user's role (Admin ↔ Super Admin) | — | ✓ |
+
+**Admin** — day-to-day boutique operations: hand out work, track returns, manage tailors, and issue receipts. Cannot change the article catalogue, pricing, or platform users from the app. Admins are created by a Super Admin from `/users`.
+
+**Super Admin** — everything an Admin can do, plus full control of the article and price catalogue and platform user management. Rate changes apply only to **new** assignments; existing assignments keep the rate snapshotted at creation.
+
+The first Super Admin is bootstrapped in the Supabase SQL Editor (see README). After that, Super Admins can create additional Admins and promote/demote roles from `/users`.
 
 ## 5. Core Concepts and Glossary
 
 - **Employee** — a tailor who receives articles to stitch.
-- **Article Type** — a garment category with a fixed stitching rate (e.g. Shirt, Trouser, Kurta). Rates live in Supabase and are **not editable from the assignment form**.
+- **Article Type** — a garment category with a fixed stitching rate (e.g. Shirt, Trouser, Kurta). Rates live in the `article_types` table. Admins see them read-only; Super Admins can add and edit them from `/articles`. The assignment form always shows the rate as read-only.
 - **Assignment** — one line of work: one employee, one article type, one size, a quantity assigned, and the stitching rate captured at the time of assignment.
 - **Completion Entry** — a dated record of pieces handed back against a single assignment. An assignment can have many completion entries.
 - **Remaining / In Progress** — `quantity_assigned − sum(completion entries)` for an assignment.
@@ -170,14 +188,61 @@ Available from the employee group header on `/tracking` as a `Print Receipt` but
 
 ### 6.7 Article and Price Catalogue (`/articles`)
 
-- Read-only table in v1: article name and stitching rate.
-- Rates are seeded and maintained directly in Supabase.
-- Because assignments snapshot the rate, editing a rate in Supabase only affects assignments created afterwards.
+Shared for both roles:
+
+- Table columns: article name, stitching rate (₹), count of open assignment lines, and active/inactive status.
+- Informational note: each assignment stores the rate that applied on the day it was created, so a later price change never rewrites past work.
+
+**Admin (read-only)**
+
+- The table and rates are view-only. No add, edit, or deactivate controls are shown.
+
+**Super Admin (full catalogue management)**
+
+- **Add article** — opens a dialog with:
+  - **Name** (required, unique, 1–80 characters)
+  - **Stitching rate (₹)** (required, numeric ≥ 0)
+- **Edit article** — opens the same dialog pre-filled. Name and rate can both be changed.
+- **Deactivate / reactivate** — toggles `is_active`. Deactivated articles disappear from the assignment dropdown but all history is retained. Deactivation is blocked while the article has open assignment lines (remaining quantity > 0), with a clear error message.
+- New articles are immediately available on `/assign` for new assignments.
+
+Because assignments snapshot the rate at creation, editing a rate only affects assignments created afterwards.
+
+### 6.8 Platform User Management (`/users`, Super Admin only)
+
+Super Admin screen for managing who can sign in to the application. Non–Super Admin users who open `/users` are redirected to `/tracking`.
+
+**User list**
+
+- Table columns: email, role (`Admin` / `Super Admin`), invited date (when applicable), last sign-in.
+- The signed-in Super Admin's own row is marked and cannot be demoted.
+
+**Add Admin**
+
+- Super Admin enters:
+  - **Email** (required)
+  - **Password** (optional — if left blank, the system generates a random password)
+- A confirmed Supabase Auth account is created with role `admin`.
+- After creation, the app shows the email and password on screen so the Super Admin can copy and share them manually (e.g. Slack, WhatsApp). **No email is sent by the app.**
+- The new user signs in at `/login` with those credentials. No separate sign-up screen.
+- If the email address already belongs to an account, creation is rejected with a clear message.
+
+**Change role**
+
+- Super Admin can promote an Admin to Super Admin, or demote a Super Admin to Admin, via an inline role control.
+- **Safeguards:**
+  - A Super Admin cannot change their own role.
+  - The last remaining Super Admin cannot be demoted.
+
+**Bootstrap**
+
+- The very first Super Admin is still created manually in SQL when the project is first set up. All subsequent Admins are created from the app.
 
 ## 7. Data Model
 
 ```mermaid
 erDiagram
+    APP_USERS ||--|| AUTH_USERS : "extends"
     EMPLOYEES ||--o{ ASSIGNMENTS : "receives"
     ARTICLE_TYPES ||--o{ ASSIGNMENTS : "priced by"
     ASSIGNMENTS ||--o{ COMPLETION_ENTRIES : "fulfilled by"
@@ -187,6 +252,16 @@ erDiagram
 ```
 
 ### 7.1 Tables
+
+**`app_users`**
+
+- `id` uuid, primary key, references `auth.users` on delete cascade
+- `role` enum `app_role` — `admin` | `super_admin`, default `admin`
+- `invited_by` uuid, nullable, references `auth.users` — set when a Super Admin creates the user from `/users`
+- `invited_at` timestamptz, nullable — when the account was created from `/users`
+- `created_at` timestamptz, default now()
+
+A row is created automatically when a new Auth user is registered. Invited users are always created with role `admin`. The first Super Admin is assigned by updating this row in SQL.
 
 **`employees`**
 
@@ -255,7 +330,10 @@ Exposed through a database view so the client never recomputes them inconsistent
 
 - Database-level check constraints on all quantity fields.
 - A trigger or transactional check prevents total completions from exceeding `quantity_assigned`.
-- Row Level Security enabled on every table; policies grant access only to authenticated admin users.
+- Row Level Security enabled on every table.
+- Operational tables (`employees`, `assignments`, `completion_entries`, `assignment_adjustments`, `receipts`) grant full access to any authenticated user with a role (`admin` or `super_admin`).
+- `article_types`: `select` for all authenticated users; `insert` and `update` only when `app_users.role = super_admin`.
+- `app_users`: each user may `select` their own row; Super Admins may `select` all rows and `update` any row's `role` (subject to app-level safeguards). Creating users uses the Supabase service-role key on the server only.
 - Indexes on `assignments.employee_id`, `assignments.article_type_id`, `completion_entries.assignment_id`, and `completion_entries.receipt_id`.
 
 ## 8. Key Flows
@@ -281,6 +359,8 @@ flowchart TD
 - **UI:** Tailwind CSS with shadcn/ui components.
 - **Backend and database:** Supabase (Postgres, Auth, RLS).
 - **Data access:** Supabase server client inside Server Components and Server Actions for all mutations. No service-role key is ever exposed to the browser.
+- **Roles:** resolved server-side from `app_users` on each request. Server actions that mutate `article_types` or platform users verify Super Admin before calling Supabase; RLS enforces the same rule as a backstop.
+- **User creation:** the Supabase **service-role key** is a server-only environment variable, used only when a Super Admin creates an account from `/users`. It is never exposed to the browser.
 - **Validation:** Zod schemas shared between client form validation and server actions; the database enforces the same rules as a final backstop.
 - **Printing:** a dedicated print route rendered server-side with a print-only stylesheet, avoiding a PDF dependency in v1.
 
@@ -291,7 +371,8 @@ flowchart TD
 - `/assign` — assignment form
 - `/tracking` — assignments, progress, completions, receipt generation
 - `/employees` — employee list and management
-- `/articles` — read-only rate catalogue
+- `/articles` — article catalogue (read-only for Admin; full management for Super Admin)
+- `/users` — platform user list, create admins, role management (Super Admin only)
 - `/receipts` — receipt history
 - `/receipts/[id]/print` — printable receipt view
 
@@ -336,4 +417,7 @@ Receipt generation, unreceipted-completion scoping, print view, receipt history.
 
 | Version | Date | Change |
 | --- | --- | --- |
+| 0.4 | 29 Aug 2026 | Removed email invites; Super Admin creates admins with email + password (optional auto-generate) and shares credentials manually |
+| 0.3 | 29 Aug 2026 | Super Admin user management: invite Admins by email (credentials + login link via Resend), list users, change roles; `/users` route |
+| 0.2 | 29 Aug 2026 | Super Admin role: full article catalogue management (add, edit rates, deactivate); Admin retains read-only catalogue access and all operational features |
 | 0.1 | 27 Aug 2026 | Initial PRD: assignment, tracking with incremental completions, top-up mechanism, and quantity-only print receipt |

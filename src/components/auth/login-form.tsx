@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Loader2Icon } from "lucide-react";
@@ -10,16 +11,27 @@ import { Input } from "@/components/ui/input";
 import { signInAction } from "@/lib/data/auth-actions";
 import { loginSchema, type LoginInput } from "@/lib/schemas";
 
-export function LoginForm({ nextPath }: { nextPath?: string }) {
+export function LoginForm({
+  nextPath,
+  defaultEmail,
+}: {
+  nextPath?: string;
+  defaultEmail?: string;
+}) {
   const {
     register,
     handleSubmit,
+    reset,
     setError,
     formState: { errors, isSubmitting },
   } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: "", password: "" },
+    defaultValues: { email: defaultEmail ?? "", password: "" },
   });
+
+  React.useEffect(() => {
+    reset({ email: defaultEmail ?? "", password: "" });
+  }, [defaultEmail, reset]);
 
   const onSubmit = async (values: LoginInput) => {
     const result = await signInAction(values);

@@ -21,7 +21,19 @@ The file is safe to re-run after a schema change.
 
 ### 2. Create the admin user
 
-In Supabase, go to Authentication → Users → Add user, and create one with an email and password. Turn off email confirmation, or confirm the address, so the account can sign in immediately. Every authenticated user is an admin in this version, so only create accounts you trust.
+In Supabase, go to Authentication → Users → Add user, and create one with an email and password. Turn off email confirmation, or confirm the address, so the account can sign in immediately. New accounts default to **Admin** — they can run day-to-day operations but cannot change article rates from the app.
+
+To promote someone to **Super Admin** (full catalogue control plus everything Admin can do), run this in the SQL Editor after the user exists — replace the email with theirs:
+
+```sql
+update public.app_users
+set role = 'super_admin'
+where id = (
+  select id from auth.users where email = 'owner@example.com'
+);
+```
+
+Re-run [supabase/schema.sql](supabase/schema.sql) if your database was created before roles were added; it backfills `app_users` for existing Auth accounts.
 
 ### 3. Configure the app
 
@@ -29,9 +41,15 @@ In Supabase, go to Authentication → Users → Add user, and create one with an
 cp .env.example .env.local
 ```
 
-Fill in `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` from Project Settings → API. Older projects call that second value the "anon public" key; set it as `SUPABASE_ANON_KEY` and that works too.
+Fill in these values:
 
-Neither variable is prefixed with `NEXT_PUBLIC_`, because every Supabase call happens on the server. Adding the prefix would ship the credentials to the browser for no benefit.
+| Variable | Where to get it |
+| --- | --- |
+| `SUPABASE_URL` | Project Settings → API |
+| `SUPABASE_PUBLISHABLE_KEY` | Same page (older projects: anon public key as `SUPABASE_ANON_KEY`) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Same page — **service_role** secret (server-only; needed to create users from `/users`) |
+
+Neither Supabase key is prefixed with `NEXT_PUBLIC_`, because every Supabase call happens on the server.
 
 ### 4. Run it
 
@@ -49,7 +67,14 @@ The app runs at http://localhost:3000 and redirects to the login screen.
 - Components read that snapshot through `useInventory()` and call server actions in `src/lib/data/actions.ts` to change anything.
 - Actions validate with the same Zod schemas the forms use, then revalidate, so a fresh snapshot streams back without any client-side cache to keep in sync.
 
-Stitching rates are deliberately read-only in the app. Change them in the Supabase dashboard; RLS only grants the app `select` on `article_types`.
+Stitching rates are read-only for **Admin** users. **Super Admin** users can add articles and edit rates on `/articles`, and create or manage platform users on `/users`.
+
+### Adding admins (Super Admin)
+
+1. Sign in as a Super Admin and open **Platform Users** (`/users`).
+2. Click **Add admin**, enter an email, and optionally set a password (or leave blank to auto-generate one).
+3. Copy the email and password shown on screen and share them over Slack, WhatsApp, or in person.
+4. The new admin signs in at `/login` with those credentials.
 
 ## Routes
 
@@ -59,7 +84,8 @@ Stitching rates are deliberately read-only in the app. Change them in the Supaba
 | `/tracking` | Assignments grouped by employee, with completions and receipt generation |
 | `/assign` | Create an assignment |
 | `/employees` | Manage tailors |
-| `/articles` | Read-only stitching rate catalogue |
+| `/articles` | Article catalogue (read-only for Admin; full management for Super Admin) |
+| `/users` | Create admins and manage roles (Super Admin only) |
 | `/receipts` | Receipt history |
 | `/receipts/[id]/print` | Printable handover slip |
 

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { SIZES } from "@/lib/types";
+import { APP_ROLES, SIZES } from "@/lib/types";
 
 const requiredId = (message: string) => z.string().min(1, message);
 
@@ -75,3 +75,46 @@ export const loginSchema = z.object({
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;
+
+export const createPlatformUserSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .min(1, "Enter an email address")
+    .email("Enter a valid email address")
+    .max(254, "Email is too long"),
+  password: z
+    .string()
+    .trim()
+    .refine((value) => value === "" || value.length >= 6, {
+      message: "Password must be at least 6 characters",
+    })
+    .refine((value) => value === "" || value.length <= 72, {
+      message: "Password is too long",
+    })
+    .optional()
+    .or(z.literal("")),
+});
+
+export type CreatePlatformUserInput = z.infer<typeof createPlatformUserSchema>;
+
+export const updateUserRoleSchema = z.object({
+  userId: z.string().uuid("Invalid user"),
+  role: z.enum(APP_ROLES, { message: "Select a role" }),
+});
+
+export type UpdateUserRoleInput = z.infer<typeof updateUserRoleSchema>;
+
+export const articleSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Enter the article name")
+    .max(80, "Name is too long"),
+  stitchingPrice: z
+    .number({ message: "Enter a stitching rate" })
+    .min(0, "Rate cannot be negative")
+    .max(999_999, "Rate looks too large"),
+});
+
+export type ArticleInput = z.infer<typeof articleSchema>;

@@ -31,12 +31,11 @@ export async function proxy(request: NextRequest) {
     },
   });
 
-  // Session from cookie — no extra Auth API round-trip. Full page loads still
-  // refresh tokens via setAll when the access token has expired.
+  // Validate and refresh the session with Supabase Auth so RLS queries receive
+  // a JWT Postgres will accept (avoids "JWT issued at future" on clock skew).
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const user = session?.user ?? null;
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
   const isPublic = PUBLIC_PATHS.some(

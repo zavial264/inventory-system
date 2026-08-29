@@ -2,10 +2,13 @@ import {
   ClipboardListIcon,
   PlusCircleIcon,
   ReceiptTextIcon,
+  ShieldCheckIcon,
   TagsIcon,
   UsersIcon,
   type LucideIcon,
 } from "lucide-react";
+
+import type { AppRole } from "@/lib/types";
 
 export type NavItem = {
   href: string;
@@ -13,6 +16,7 @@ export type NavItem = {
   shortLabel: string;
   icon: LucideIcon;
   description: string;
+  superAdminOnly?: boolean;
 };
 
 export const navItems: NavItem[] = [
@@ -51,4 +55,18 @@ export const navItems: NavItem[] = [
     icon: ReceiptTextIcon,
     description: "Handover slips issued to employees",
   },
+  {
+    href: "/users",
+    label: "Platform Users",
+    shortLabel: "Users",
+    icon: ShieldCheckIcon,
+    description: "Create admins and manage roles",
+    superAdminOnly: true,
+  },
 ];
+
+export function navItemsForRole(role: AppRole) {
+  return navItems.filter(
+    (item) => !item.superAdminOnly || role === "super_admin",
+  );
+}

@@ -7,7 +7,7 @@ import { LoadingState } from "@/components/ui/loading-state";
 import { getReceipt } from "@/lib/data/queries";
 
 export const metadata: Metadata = {
-  title: "Receipt · Boutique Inventory",
+  title: "Receipt",
 };
 
 export default async function ReceiptPrintPage({

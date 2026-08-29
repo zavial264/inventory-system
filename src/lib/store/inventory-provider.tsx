@@ -4,18 +4,22 @@ import * as React from "react";
 
 import type { ActionResult } from "@/lib/action-result";
 import {
+  createArticleTypeAction,
   createAssignmentAction,
   createEmployeeAction,
   generateReceiptAction,
   recordCompletionAction,
   reverseCompletionAction,
+  setArticleTypeActiveAction,
   setEmployeeActiveAction,
   topUpAssignmentAction,
+  updateArticleTypeAction,
   updateEmployeeAction,
 } from "@/lib/data/actions";
 import type { InventorySnapshot } from "@/lib/data/queries";
 import { groupByEmployee } from "@/lib/derive";
 import type {
+  ArticleInput,
   AssignmentInput,
   CompletionInput,
   EmployeeInput,
@@ -23,6 +27,7 @@ import type {
   TopUpInput,
 } from "@/lib/schemas";
 import type {
+  AppRole,
   ArticleType,
   AssignmentAdjustment,
   AssignmentView,
@@ -33,6 +38,8 @@ import type {
 } from "@/lib/types";
 
 type InventoryContextValue = {
+  userRole: AppRole;
+  isSuperAdmin: boolean;
   state: {
     employees: Employee[];
     articleTypes: ArticleType[];
@@ -61,6 +68,9 @@ type InventoryContextValue = {
     input: ReversalInput,
   ) => Promise<ActionResult>;
   generateReceipt: (employeeId: string) => Promise<ActionResult<Receipt>>;
+  createArticleType: (input: ArticleInput) => Promise<ActionResult<ArticleType>>;
+  updateArticleType: (id: string, input: ArticleInput) => Promise<ActionResult>;
+  setArticleTypeActive: (id: string, isActive: boolean) => Promise<ActionResult>;
 };
 
 const InventoryContext = React.createContext<InventoryContextValue | null>(null);
@@ -73,13 +83,17 @@ const InventoryContext = React.createContext<InventoryContextValue | null>(null)
  */
 export function InventoryProvider({
   snapshot,
+  userRole,
   children,
 }: {
   snapshot: InventorySnapshot;
+  userRole: AppRole;
   children: React.ReactNode;
 }) {
   const value = React.useMemo<InventoryContextValue>(
     () => ({
+      userRole,
+      isSuperAdmin: userRole === "super_admin",
       state: {
         employees: snapshot.employees,
         articleTypes: snapshot.articleTypes,
@@ -97,8 +111,11 @@ export function InventoryProvider({
       recordCompletion: recordCompletionAction,
       reverseCompletion: reverseCompletionAction,
       generateReceipt: generateReceiptAction,
+      createArticleType: createArticleTypeAction,
+      updateArticleType: updateArticleTypeAction,
+      setArticleTypeActive: setArticleTypeActiveAction,
     }),
-    [snapshot],
+    [snapshot, userRole],
   );
 
   return (

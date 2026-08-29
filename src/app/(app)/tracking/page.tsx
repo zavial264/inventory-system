@@ -7,7 +7,7 @@ import { TrackingBoard } from "@/components/tracking/tracking-board";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "Work Tracking · Boutique Inventory",
+  title: "Work Tracking",
 };
 
 export default function TrackingPage() {
