@@ -11,7 +11,7 @@ export function createAdminClient() {
 
   if (!serviceRoleKey) {
     throw new Error(
-      "SUPABASE_SERVICE_ROLE_KEY is not configured. Add it to .env.local to invite users.",
+      "SUPABASE_SERVICE_ROLE_KEY is not configured. Add it to .env.local to create users.",
     );
   }
 

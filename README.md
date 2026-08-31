@@ -15,7 +15,7 @@ Full scope lives in [PRD.md](PRD.md). This README covers running the code.
 
 ### 1. Create the database
 
-In your Supabase project, open the SQL Editor and run [supabase/schema.sql](supabase/schema.sql) in full. It creates the tables, the `assignment_progress` view, the integrity triggers, RLS policies, the receipt and top-up functions, and seeds the eight default stitching rates.
+In your Supabase project, open the SQL Editor and run [supabase/schema.sql](supabase/schema.sql) in full. It creates the tables, the `assignment_progress` view, the integrity triggers, RLS policies, the receipt and top-up functions, the employee ledger, and seeds the eight default stitching rates.
 
 The file is safe to re-run after a schema change.
 
@@ -67,7 +67,7 @@ The app runs at http://localhost:3000 and redirects to the login screen.
 - Components read that snapshot through `useInventory()` and call server actions in `src/lib/data/actions.ts` to change anything.
 - Actions validate with the same Zod schemas the forms use, then revalidate, so a fresh snapshot streams back without any client-side cache to keep in sync.
 
-Stitching rates are read-only for **Admin** users. **Super Admin** users can add articles and edit rates on `/articles`, and create or manage platform users on `/users`.
+Stitching rates are read-only for **Admin** users. **Super Admin** users can add articles and edit rates on `/articles`, create or manage platform users on `/users`, and open an employee's earnings ledger (up to 30 days) from `/employees`.
 
 ### Adding admins (Super Admin)
 
@@ -83,10 +83,10 @@ Stitching rates are read-only for **Admin** users. **Super Admin** users can add
 | `/login` | Admin sign-in |
 | `/tracking` | Assignments grouped by employee, with completions and receipt generation |
 | `/assign` | Create an assignment |
-| `/employees` | Manage tailors |
+| `/employees` | Manage tailors (Super Admin also opens an earnings ledger of up to 30 days per employee) |
 | `/articles` | Article catalogue (read-only for Admin; full management for Super Admin) |
 | `/users` | Create admins and manage roles (Super Admin only) |
-| `/receipts` | Receipt history |
+| `/receipts` | Receipt history (search by employee, date filter, 50 per page) |
 | `/receipts/[id]/print` | Printable handover slip |
 
 ## Key rules, and where they are enforced
@@ -101,7 +101,8 @@ These are enforced in the database rather than only in the UI, so a bad request 
 | Completion entries are append-only; corrections post a negative reversal with a mandatory reason | `reverseCompletionAction` and the same balance trigger |
 | Raising an assigned quantity always writes an audit record | `top_up_assignment()`, which does both in one transaction |
 | A receipt only covers completions not already receipted, so nothing is counted twice | `generate_receipt()`, which stamps the entries it includes |
-| Receipts show quantities only, never amounts | The receipt snapshot stores article, size, and quantity |
+| Receipts show quantities and PKR totals using assignment snapshot rates | The receipt snapshot stores article, size, quantity, unit price, and line total |
+| Every completion (and reversal) posts a priced row into `employee_ledger` | `completion_entries_ledger` trigger |
 
 ## Scripts
 

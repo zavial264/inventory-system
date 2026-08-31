@@ -1,4 +1,5 @@
-import type { AssignmentView, EmployeeGroup } from "@/lib/types";
+import { isDateWithinRange } from "@/lib/format";
+import type { AssignmentView, CompletionEntry, EmployeeGroup } from "@/lib/types";
 
 /**
  * Per-assignment balances come from the `assignment_progress` view in Postgres.
@@ -37,4 +38,32 @@ export function groupByEmployee(views: AssignmentView[]): EmployeeGroup[] {
     const bLatest = b.assignments[0]?.updatedAt ?? "";
     return bLatest.localeCompare(aLatest);
   });
+}
+
+/** True when the employee had assignments or completions in the inclusive range. */
+export function employeeWorkedInPeriod(
+  employeeId: string,
+  start: string,
+  end: string,
+  assignmentViews: AssignmentView[],
+  completionEntries: CompletionEntry[],
+): boolean {
+  const assignmentById = new Map(
+    assignmentViews.map((view) => [view.id, view]),
+  );
+
+  const hasAssignment = assignmentViews.some(
+    (view) =>
+      view.employeeId === employeeId &&
+      (isDateWithinRange(view.createdAt.slice(0, 10), start, end) ||
+        isDateWithinRange(view.updatedAt.slice(0, 10), start, end)),
+  );
+
+  const hasCompletion = completionEntries.some((entry) => {
+    const assignment = assignmentById.get(entry.assignmentId);
+    if (!assignment || assignment.employeeId !== employeeId) return false;
+    return isDateWithinRange(entry.completedOn, start, end);
+  });
+
+  return hasAssignment || hasCompletion;
 }

@@ -105,7 +105,7 @@ export function ArticleDialog({
           </FormField>
 
           <FormField
-            label="Stitching rate (₹)"
+            label="Stitching rate (PKR)"
             htmlFor="article-rate"
             required
             error={errors.stitchingPrice?.message}

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { FormField } from "@/components/form/form-field";
@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toDateInputValue } from "@/lib/format";
@@ -42,6 +43,7 @@ export function CompletionDialog({
     reset,
     setValue,
     setError,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<CompletionInput>({
     resolver: zodResolver(completionSchema),
@@ -125,12 +127,23 @@ export function CompletionDialog({
             required
             error={errors.completedOn?.message}
           >
-            <Input
-              id="completion-date"
-              type="date"
-              max={toDateInputValue()}
-              aria-invalid={Boolean(errors.completedOn)}
-              {...register("completedOn")}
+            <Controller
+              name="completedOn"
+              control={control}
+              render={({ field }) => (
+                <DateInput
+                  id="completion-date"
+                  value={field.value}
+                  onValueChange={(next) => {
+                    field.onChange(next);
+                    void field.onBlur();
+                  }}
+                  max={toDateInputValue()}
+                  required
+                  placeholder="Pick the handover date"
+                  aria-invalid={Boolean(errors.completedOn)}
+                />
+              )}
             />
           </FormField>
 

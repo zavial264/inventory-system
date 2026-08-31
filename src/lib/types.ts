@@ -74,6 +74,8 @@ export type ReceiptLine = {
   articleName: string;
   size: Size;
   quantity: number;
+  unitPrice?: number;
+  lineTotal?: number;
 };
 
 export type Receipt = {
@@ -84,9 +86,36 @@ export type Receipt = {
   snapshot: {
     employeeName: string;
     lines: ReceiptLine[];
+    totalAmount?: number;
   };
   totalPieces: number;
+  totalAmount: number | null;
   createdAt: string;
+};
+
+export type LedgerEntry = {
+  id: string;
+  employeeId: string;
+  completionEntryId: string;
+  assignmentId: string;
+  articleTypeId: string;
+  articleName: string;
+  size: Size;
+  quantity: number;
+  unitPrice: number;
+  amount: number;
+  occurredOn: string;
+  createdAt: string;
+};
+
+export type EmployeeLedger = {
+  employeeId: string;
+  employeeName: string;
+  from: string;
+  to: string;
+  entries: LedgerEntry[];
+  totalPieces: number;
+  totalAmount: number;
 };
 
 export type AssignmentStatus = "not_started" | "in_progress" | "completed";

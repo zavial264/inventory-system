@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { describeDbError, fail, ok, type ActionResult } from "@/lib/action-result";
 import { requireSuperAdmin } from "@/lib/auth/roles";
-import { toEmployee, toReceipt, toArticleType } from "@/lib/data/mappers";
+import { toArticleType, toEmployee, toReceipt } from "@/lib/data/mappers";
 import {
   articleSchema,
   assignmentSchema,
@@ -126,7 +126,9 @@ export async function setEmployeeActiveAction(
 export async function createArticleTypeAction(
   input: ArticleInput,
 ): Promise<ActionResult<ArticleType>> {
-  const gate = await requireSuperAdmin();
+  const gate = await requireSuperAdmin(
+    "Only a Super Admin can change the article catalogue",
+  );
   if (!gate.ok) return fail(gate.error);
 
   const parsed = articleSchema.safeParse(input);
@@ -158,7 +160,9 @@ export async function updateArticleTypeAction(
   id: string,
   input: ArticleInput,
 ): Promise<ActionResult> {
-  const gate = await requireSuperAdmin();
+  const gate = await requireSuperAdmin(
+    "Only a Super Admin can change the article catalogue",
+  );
   if (!gate.ok) return fail(gate.error);
 
   const parsed = articleSchema.safeParse(input);
@@ -189,7 +193,9 @@ export async function setArticleTypeActiveAction(
   id: string,
   isActive: boolean,
 ): Promise<ActionResult> {
-  const gate = await requireSuperAdmin();
+  const gate = await requireSuperAdmin(
+    "Only a Super Admin can change the article catalogue",
+  );
   if (!gate.ok) return fail(gate.error);
 
   const supabase = await createClient();

@@ -4,6 +4,7 @@ import type {
   AssignmentAdjustment,
   CompletionEntry,
   Employee,
+  LedgerEntry,
   Receipt,
   ReceiptLine,
 } from "@/lib/types";
@@ -62,8 +63,32 @@ export function toAdjustment(
 export function toReceipt(row: Tables["receipts"]["Row"]): Receipt {
   const snapshot = (row.snapshot ?? {}) as {
     employeeName?: string;
-    lines?: ReceiptLine[];
+    lines?: Array<{
+      articleName: string;
+      size: ReceiptLine["size"];
+      quantity: number;
+      unitPrice?: number;
+      lineTotal?: number;
+    }>;
+    totalAmount?: number;
   };
+
+  const lines: ReceiptLine[] = (snapshot.lines ?? []).map((line) => ({
+    articleName: line.articleName,
+    size: line.size,
+    quantity: line.quantity,
+    unitPrice:
+      line.unitPrice != null ? Number(line.unitPrice) : undefined,
+    lineTotal:
+      line.lineTotal != null ? Number(line.lineTotal) : undefined,
+  }));
+
+  const totalAmount =
+    row.total_amount != null
+      ? Number(row.total_amount)
+      : snapshot.totalAmount != null
+        ? Number(snapshot.totalAmount)
+        : null;
 
   return {
     id: row.id,
@@ -71,9 +96,28 @@ export function toReceipt(row: Tables["receipts"]["Row"]): Receipt {
     employeeId: row.employee_id,
     snapshot: {
       employeeName: snapshot.employeeName ?? "",
-      lines: snapshot.lines ?? [],
+      lines,
+      totalAmount: totalAmount ?? undefined,
     },
     totalPieces: row.total_pieces,
+    totalAmount,
+    createdAt: row.created_at,
+  };
+}
+
+export function toLedgerEntry(row: Tables["employee_ledger"]["Row"]): LedgerEntry {
+  return {
+    id: row.id,
+    employeeId: row.employee_id,
+    completionEntryId: row.completion_entry_id,
+    assignmentId: row.assignment_id,
+    articleTypeId: row.article_type_id,
+    articleName: row.article_name,
+    size: row.size,
+    quantity: row.quantity,
+    unitPrice: Number(row.unit_price),
+    amount: Number(row.amount),
+    occurredOn: row.occurred_on,
     createdAt: row.created_at,
   };
 }
