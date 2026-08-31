@@ -47,7 +47,7 @@ export function AppSidebar({
               href={item.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "group flex items-start gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors",
+                "group flex cursor-pointer items-start gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors",
                 active
                   ? "bg-card font-medium text-foreground shadow-sm"
                   : "text-muted-foreground hover:bg-card/60 hover:text-foreground",
@@ -87,7 +87,7 @@ export function AppSidebar({
             <button
               type="submit"
               aria-label="Sign out"
-              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
+              className="cursor-pointer rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
             >
               <LogOutIcon className="size-4" />
             </button>
@@ -121,7 +121,7 @@ export function MobileNav({ userRole }: { userRole: AppRole }) {
               href={item.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors",
+                "flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors",
                 active
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-accent",
