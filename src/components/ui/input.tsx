@@ -12,6 +12,7 @@ function Input({ className, type, ...props }: React.ComponentProps<"input">) {
         "placeholder:text-muted-foreground",
         "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/30",
         "disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground",
+        type === "date" && "cursor-pointer",
         "aria-invalid:border-destructive aria-invalid:ring-destructive/25",
         className,
       )}

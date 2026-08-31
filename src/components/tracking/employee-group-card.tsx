@@ -63,7 +63,7 @@ export function EmployeeGroupCard({
     >
       <div className="flex flex-col gap-4 px-4 py-4 sm:px-5">
         <div className="flex flex-wrap items-center gap-3">
-          <CollapsibleTrigger className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40">
+          <CollapsibleTrigger className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-lg text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40">
             <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground">
               {initialsOf(group.employee.name)}
             </span>
