@@ -27,7 +27,9 @@ function firstIssue(error: { issues: { message: string }[] }) {
 export async function listPlatformUsersAction(): Promise<
   ActionResult<PlatformUser[]>
 > {
-  const gate = await requireSuperAdmin();
+  const gate = await requireSuperAdmin(
+    "Only a Super Admin can manage platform users",
+  );
   if (!gate.ok) return fail(gate.error);
 
   try {
@@ -40,7 +42,9 @@ export async function listPlatformUsersAction(): Promise<
 export async function createPlatformUserAction(
   input: CreatePlatformUserInput,
 ): Promise<ActionResult<{ email: string; password: string }>> {
-  const gate = await requireSuperAdmin();
+  const gate = await requireSuperAdmin(
+    "Only a Super Admin can manage platform users",
+  );
   if (!gate.ok) return fail(gate.error);
 
   const parsed = createPlatformUserSchema.safeParse(input);
@@ -91,7 +95,9 @@ export async function createPlatformUserAction(
 export async function updatePlatformUserRoleAction(
   input: UpdateUserRoleInput,
 ): Promise<ActionResult> {
-  const gate = await requireSuperAdmin();
+  const gate = await requireSuperAdmin(
+    "Only a Super Admin can manage platform users",
+  );
   if (!gate.ok) return fail(gate.error);
 
   const parsed = updateUserRoleSchema.safeParse(input);

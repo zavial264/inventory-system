@@ -6,17 +6,22 @@ import { toast } from "sonner";
 import {
   PencilIcon,
   PlusIcon,
+  ScrollTextIcon,
   SearchIcon,
   UserCheckIcon,
   UserRoundXIcon,
   UsersIcon,
+  XIcon,
 } from "lucide-react";
 
 import { EmployeeDialog } from "@/components/employees/employee-dialog";
+import { EmployeeLedgerDialog } from "@/components/employees/employee-ledger-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DateInput } from "@/components/ui/date-input";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -30,23 +35,42 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { initialsOf } from "@/lib/format";
+import { employeeWorkedInPeriod } from "@/lib/derive";
+import { formatDate, initialsOf } from "@/lib/format";
 import { useInventory } from "@/lib/store/inventory-provider";
 import type { Employee } from "@/lib/types";
 
 export function EmployeesTable() {
-  const { state, assignmentViews, setEmployeeActive } = useInventory();
+  const { state, assignmentViews, setEmployeeActive, isSuperAdmin } =
+    useInventory();
   const [search, setSearch] = React.useState("");
+  const [workedFrom, setWorkedFrom] = React.useState("");
+  const [workedTo, setWorkedTo] = React.useState("");
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Employee | undefined>();
+  const [ledgerEmployee, setLedgerEmployee] = React.useState<
+    Employee | undefined
+  >();
+
+  const periodFilterActive = Boolean(workedFrom && workedTo);
+  const periodInvalid =
+    periodFilterActive && workedFrom > workedTo;
 
   const rows = React.useMemo(() => {
     const query = search.trim().toLowerCase();
 
     return state.employees
-      .filter((employee) =>
-        query ? employee.name.toLowerCase().includes(query) : true,
-      )
+      .filter((employee) => {
+        if (query && !employee.name.toLowerCase().includes(query)) return false;
+        if (!periodFilterActive || periodInvalid) return true;
+        return employeeWorkedInPeriod(
+          employee.id,
+          workedFrom,
+          workedTo,
+          assignmentViews,
+          state.completionEntries,
+        );
+      })
       .map((employee) => {
         const lines = assignmentViews.filter(
           (view) => view.employeeId === employee.id,
@@ -66,7 +90,16 @@ export function EmployeesTable() {
         }
         return a.employee.name.localeCompare(b.employee.name);
       });
-  }, [state.employees, assignmentViews, search]);
+  }, [
+    state.employees,
+    state.completionEntries,
+    assignmentViews,
+    search,
+    periodFilterActive,
+    periodInvalid,
+    workedFrom,
+    workedTo,
+  ]);
 
   const toggleActive = async (employee: Employee) => {
     const result = await setEmployeeActive(employee.id, !employee.isActive);
@@ -81,19 +114,71 @@ export function EmployeesTable() {
     );
   };
 
+  const clearPeriod = () => {
+    setWorkedFrom("");
+    setWorkedTo("");
+  };
+
+  const dateFilterActive = workedFrom !== "" || workedTo !== "";
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative w-full sm:max-w-xs">
-          <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search employees"
-            aria-label="Search employees"
-            className="pl-9"
-          />
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="relative sm:w-64">
+            <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search employees"
+              aria-label="Search employees"
+              className="pl-9"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="worked-from" className="text-xs">
+                Worked from
+              </Label>
+              <DateInput
+                id="worked-from"
+                value={workedFrom}
+                onValueChange={setWorkedFrom}
+                max={workedTo || undefined}
+                placeholder="Start date"
+                className="w-44"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="worked-to" className="text-xs">
+                Worked to
+              </Label>
+              <DateInput
+                id="worked-to"
+                value={workedTo}
+                onValueChange={setWorkedTo}
+                min={workedFrom || undefined}
+                placeholder="End date"
+                className="w-44"
+              />
+            </div>
+
+            {dateFilterActive ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 gap-1.5 border-input text-muted-foreground hover:text-foreground"
+                onClick={clearPeriod}
+              >
+                <XIcon className="size-3.5" />
+                Clear date filter
+              </Button>
+            ) : null}
+          </div>
         </div>
+
         <Button
           onClick={() => {
             setEditing(undefined);
@@ -105,14 +190,31 @@ export function EmployeesTable() {
         </Button>
       </div>
 
+      {periodInvalid ? (
+        <p className="text-sm text-destructive">
+          The start date must be on or before the end date.
+        </p>
+      ) : periodFilterActive ? (
+        <p className="text-sm text-muted-foreground">
+          Employees with assignments or completions between{" "}
+          {formatDate(workedFrom)} and {formatDate(workedTo)}.
+        </p>
+      ) : null}
+
       {rows.length === 0 ? (
         <EmptyState
           icon={UsersIcon}
-          title={search ? "No employees match that search" : "No employees yet"}
+          title={
+            search || periodFilterActive
+              ? "No employees match your filters"
+              : "No employees yet"
+          }
           description={
             search
               ? "Try a different name."
-              : "Add the tailors you work with to start assigning articles."
+              : periodFilterActive
+                ? "Try a different date range or clear the date filter."
+                : "Add the tailors you work with to start assigning articles."
           }
         />
       ) : (
@@ -155,6 +257,16 @@ export function EmployeesTable() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
+                      {isSuperAdmin ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setLedgerEmployee(employee)}
+                        >
+                          <ScrollTextIcon />
+                          Ledger
+                        </Button>
+                      ) : null}
                       {employee.isActive ? (
                         <Button size="sm" variant="outline" asChild>
                           <Link href={`/assign?employee=${employee.id}`}>
@@ -216,6 +328,14 @@ export function EmployeesTable() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         employee={editing}
+      />
+      <EmployeeLedgerDialog
+        key={ledgerEmployee?.id ?? "closed"}
+        employee={ledgerEmployee}
+        open={Boolean(ledgerEmployee)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setLedgerEmployee(undefined);
+        }}
       />
     </div>
   );

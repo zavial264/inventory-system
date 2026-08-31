@@ -41,12 +41,12 @@ export async function getCurrentUserRole(
   return data.role as AppRole;
 }
 
-export async function requireSuperAdmin(): Promise<
-  { ok: true } | { ok: false; error: string }
-> {
+export async function requireSuperAdmin(
+  message = "Only a Super Admin can do that",
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const role = await getCurrentUserRole();
   if (role !== "super_admin") {
-    return { ok: false, error: "Only a Super Admin can change the article catalogue" };
+    return { ok: false, error: message };
   }
   return { ok: true };
 }

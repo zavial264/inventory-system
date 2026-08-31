@@ -65,20 +65,11 @@ export function CreateUserDialog({
     reset,
     setValue,
     setError,
-    watch,
     formState: { errors, isSubmitting },
   } = useForm<CreatePlatformUserInput>({
     resolver: zodResolver(createPlatformUserSchema),
     defaultValues: { email: "", password: "" },
   });
-
-  const passwordValue = watch("password");
-
-  React.useEffect(() => {
-    if (!open) return;
-    reset({ email: "", password: "" });
-    setCredentials(null);
-  }, [open, reset]);
 
   const closeDialog = () => {
     setCredentials(null);
@@ -103,7 +94,16 @@ export function CreateUserDialog({
       : "/login";
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (nextOpen) {
+          reset({ email: "", password: "" });
+          setCredentials(null);
+        }
+        onOpenChange(nextOpen);
+      }}
+    >
       <DialogContent className="max-w-md">
         {credentials ? (
           <>
@@ -174,7 +174,7 @@ export function CreateUserDialog({
               <FormField
                 label="Password"
                 htmlFor="create-user-password"
-                hint="Optional — leave blank to auto-generate"
+                hint="Optional — leave blank to auto-generate. If you set one, use at least 6 characters."
                 error={errors.password?.message}
               >
                 <div className="flex gap-2">
@@ -200,13 +200,6 @@ export function CreateUserDialog({
                   </Button>
                 </div>
               </FormField>
-
-              {passwordValue ? (
-                <p className="text-xs text-muted-foreground">
-                  Minimum 6 characters. Share this password securely after
-                  creating the account.
-                </p>
-              ) : null}
             </form>
 
             <DialogFooter>

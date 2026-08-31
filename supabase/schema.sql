@@ -68,8 +68,13 @@ create table if not exists public.receipts (
   -- Frozen copy of the printed lines so a re-print always matches the original.
   snapshot jsonb not null,
   total_pieces integer not null check (total_pieces > 0),
+  total_amount numeric(10, 2) check (total_amount is null or total_amount >= 0),
   created_at timestamptz not null default now()
 );
+
+alter table public.receipts
+  add column if not exists total_amount numeric(10, 2)
+  check (total_amount is null or total_amount >= 0);
 
 create index if not exists receipts_employee_id_idx
   on public.receipts (employee_id);
@@ -112,6 +117,139 @@ create index if not exists completion_entries_receipt_id_idx
   on public.completion_entries (receipt_id);
 create index if not exists completion_entries_unreceipted_idx
   on public.completion_entries (assignment_id) where receipt_id is null;
+
+-- Full history of completed work priced at the assignment rate. The weekly
+-- Super Admin view reads a slice of this table; it is not a weekly snapshot.
+create table if not exists public.employee_ledger (
+  id uuid primary key default gen_random_uuid(),
+  employee_id uuid not null references public.employees (id) on delete restrict,
+  completion_entry_id uuid not null unique
+    references public.completion_entries (id) on delete cascade,
+  assignment_id uuid not null references public.assignments (id) on delete cascade,
+  article_type_id uuid not null references public.article_types (id) on delete restrict,
+  article_name text not null,
+  size public.article_size not null,
+  quantity integer not null check (quantity <> 0),
+  unit_price numeric(10, 2) not null check (unit_price >= 0),
+  amount numeric(10, 2) not null,
+  occurred_on date not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists employee_ledger_employee_occurred_idx
+  on public.employee_ledger (employee_id, occurred_on);
+
+create or replace function public.sync_employee_ledger()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_employee_id uuid;
+  v_article_type_id uuid;
+  v_article_name text;
+  v_size public.article_size;
+  v_unit_price numeric(10, 2);
+begin
+  if tg_op = 'DELETE' then
+    delete from public.employee_ledger where completion_entry_id = old.id;
+    return old;
+  end if;
+
+  select
+    a.employee_id,
+    a.article_type_id,
+    art.name,
+    a.size,
+    a.unit_price
+  into
+    v_employee_id,
+    v_article_type_id,
+    v_article_name,
+    v_size,
+    v_unit_price
+  from public.assignments a
+  join public.article_types art on art.id = a.article_type_id
+  where a.id = new.assignment_id;
+
+  if v_employee_id is null then
+    raise exception 'ASSIGNMENT_NOT_FOUND' using errcode = 'no_data_found';
+  end if;
+
+  insert into public.employee_ledger (
+    employee_id,
+    completion_entry_id,
+    assignment_id,
+    article_type_id,
+    article_name,
+    size,
+    quantity,
+    unit_price,
+    amount,
+    occurred_on
+  )
+  values (
+    v_employee_id,
+    new.id,
+    new.assignment_id,
+    v_article_type_id,
+    v_article_name,
+    v_size,
+    new.quantity,
+    v_unit_price,
+    (new.quantity * v_unit_price)::numeric(10, 2),
+    new.completed_on
+  )
+  on conflict (completion_entry_id) do update set
+    employee_id = excluded.employee_id,
+    assignment_id = excluded.assignment_id,
+    article_type_id = excluded.article_type_id,
+    article_name = excluded.article_name,
+    size = excluded.size,
+    quantity = excluded.quantity,
+    unit_price = excluded.unit_price,
+    amount = excluded.amount,
+    occurred_on = excluded.occurred_on;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists completion_entries_ledger on public.completion_entries;
+create trigger completion_entries_ledger
+  after insert or update or delete on public.completion_entries
+  for each row execute function public.sync_employee_ledger();
+
+insert into public.employee_ledger (
+  employee_id,
+  completion_entry_id,
+  assignment_id,
+  article_type_id,
+  article_name,
+  size,
+  quantity,
+  unit_price,
+  amount,
+  occurred_on,
+  created_at
+)
+select
+  a.employee_id,
+  ce.id,
+  a.id,
+  a.article_type_id,
+  art.name,
+  a.size,
+  ce.quantity,
+  a.unit_price,
+  (ce.quantity * a.unit_price)::numeric(10, 2),
+  ce.completed_on,
+  ce.created_at
+from public.completion_entries ce
+join public.assignments a on a.id = ce.assignment_id
+join public.article_types art on art.id = a.article_type_id
+on conflict (completion_entry_id) do nothing;
 
 create table if not exists public.assignment_adjustments (
   id uuid primary key default gen_random_uuid(),
@@ -283,6 +421,7 @@ declare
   v_employee_name text;
   v_lines jsonb;
   v_total integer;
+  v_total_amount numeric(10, 2);
   v_receipt public.receipts;
 begin
   select name into v_employee_name
@@ -295,11 +434,14 @@ begin
 
   -- A bucket that nets to zero or less is an unresolved correction. Leave those
   -- entries open so they offset a future receipt instead of vanishing.
+  -- Group by rate as well: the same article/size can carry different prices
+  -- across assignments when rates changed over time.
   with pending as (
     select
       art.id as article_type_id,
       art.name as article_name,
       a.size,
+      a.unit_price,
       ce.quantity
     from public.completion_entries ce
     join public.assignments a on a.id = ce.assignment_id
@@ -308,9 +450,14 @@ begin
       and a.employee_id = p_employee_id
   ),
   buckets as (
-    select article_name, size, sum(quantity)::integer as quantity
+    select
+      article_name,
+      size,
+      unit_price,
+      sum(quantity)::integer as quantity,
+      (sum(quantity) * unit_price)::numeric(10, 2) as line_total
     from pending
-    group by article_type_id, article_name, size
+    group by article_type_id, article_name, size, unit_price
     having sum(quantity) > 0
   )
   select
@@ -319,26 +466,34 @@ begin
         jsonb_build_object(
           'articleName', article_name,
           'size', size,
-          'quantity', quantity
+          'quantity', quantity,
+          'unitPrice', unit_price,
+          'lineTotal', line_total
         )
-        order by article_name, size
+        order by article_name, size, unit_price
       ),
       '[]'::jsonb
     ),
-    coalesce(sum(quantity), 0)::integer
-  into v_lines, v_total
+    coalesce(sum(quantity), 0)::integer,
+    coalesce(sum(line_total), 0)::numeric(10, 2)
+  into v_lines, v_total, v_total_amount
   from buckets;
 
   if v_total <= 0 then
     raise exception 'NO_PENDING_PIECES' using errcode = 'no_data_found';
   end if;
 
-  insert into public.receipts (receipt_no, employee_id, snapshot, total_pieces)
+  insert into public.receipts (receipt_no, employee_id, snapshot, total_pieces, total_amount)
   values (
     public.next_receipt_no(),
     p_employee_id,
-    jsonb_build_object('employeeName', v_employee_name, 'lines', v_lines),
-    v_total
+    jsonb_build_object(
+      'employeeName', v_employee_name,
+      'lines', v_lines,
+      'totalAmount', v_total_amount
+    ),
+    v_total,
+    v_total_amount
   )
   returning * into v_receipt;
 
@@ -347,6 +502,7 @@ begin
       ce.id as entry_id,
       a.article_type_id,
       a.size,
+      a.unit_price,
       ce.quantity
     from public.completion_entries ce
     join public.assignments a on a.id = ce.assignment_id
@@ -354,16 +510,18 @@ begin
       and a.employee_id = p_employee_id
   ),
   included as (
-    select article_type_id, size
+    select article_type_id, size, unit_price
     from pending
-    group by article_type_id, size
+    group by article_type_id, size, unit_price
     having sum(quantity) > 0
   )
   update public.completion_entries ce
   set receipt_id = v_receipt.id
   from pending p
   where ce.id = p.entry_id
-    and (p.article_type_id, p.size) in (select article_type_id, size from included);
+    and (p.article_type_id, p.size, p.unit_price) in (
+      select article_type_id, size, unit_price from included
+    );
 
   return v_receipt;
 end;
@@ -484,6 +642,21 @@ alter table public.assignments enable row level security;
 alter table public.completion_entries enable row level security;
 alter table public.assignment_adjustments enable row level security;
 alter table public.receipts enable row level security;
+alter table public.employee_ledger enable row level security;
+
+drop policy if exists app_users_read_own on public.app_users;
+create policy app_users_read_own on public.app_users
+  for select to authenticated using (id = auth.uid());
+
+drop policy if exists app_users_super_admin_read on public.app_users;
+create policy app_users_super_admin_read on public.app_users
+  for select to authenticated using (public.is_super_admin());
+
+drop policy if exists app_users_super_admin_update on public.app_users;
+create policy app_users_super_admin_update on public.app_users
+  for update to authenticated
+  using (public.is_super_admin())
+  with check (public.is_super_admin());
 
 drop policy if exists app_users_read_own on public.app_users;
 create policy app_users_read_own on public.app_users
@@ -537,8 +710,13 @@ create policy article_types_super_admin_update on public.article_types
   using (public.is_super_admin())
   with check (public.is_super_admin());
 
+drop policy if exists employee_ledger_super_admin_read on public.employee_ledger;
+create policy employee_ledger_super_admin_read on public.employee_ledger
+  for select to authenticated using (public.is_super_admin());
+
 revoke all on public.assignment_progress from anon;
 grant select on public.assignment_progress to authenticated;
+grant select on public.employee_ledger to authenticated;
 grant execute on function public.generate_receipt(uuid) to authenticated;
 grant execute on function public.top_up_assignment(uuid, integer, text) to authenticated;
 

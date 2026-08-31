@@ -1,7 +1,7 @@
 # Boutique Inventory System — Product Requirements Document
 
-- **Version:** 0.2 (Draft)
-- **Last updated:** 29 Aug 2026
+- **Version:** 0.5 (Draft)
+- **Last updated:** 31 Aug 2026
 - **Owner:** Product owner (boutique admin)
 - **Status:** Approved scope for v1 build
 
@@ -38,7 +38,7 @@ A boutique distributes cut fabric pieces to stitching employees (tailors) and cu
 
 ### 3.2 Non-Goals (v1)
 
-- Payroll, payment settlement, or wage disbursement tracking.
+- Payment settlement or wage disbursement (money paid out). Super Admin can view a weekly earnings ledger of completed stitching work; that is not a payroll or payout record.
 - Raw material / fabric stock management.
 - Customer orders, sales, or billing.
 - Employee-facing logins or a mobile app.
@@ -63,10 +63,11 @@ Authentication is Supabase Auth (email + password). All application routes are p
 | View platform users (`/users`) | — | ✓ |
 | Create new Admin users (`/users`) | — | ✓ |
 | Change another user's role (Admin ↔ Super Admin) | — | ✓ |
+| View an employee's weekly earnings ledger | — | ✓ |
 
 **Admin** — day-to-day boutique operations: hand out work, track returns, manage tailors, and issue receipts. Cannot change the article catalogue, pricing, or platform users from the app. Admins are created by a Super Admin from `/users`.
 
-**Super Admin** — everything an Admin can do, plus full control of the article and price catalogue and platform user management. Rate changes apply only to **new** assignments; existing assignments keep the rate snapshotted at creation.
+**Super Admin** — everything an Admin can do, plus full control of the article and price catalogue, platform user management, and the employee earnings ledger. Rate changes apply only to **new** assignments; existing assignments keep the rate snapshotted at creation.
 
 The first Super Admin is bootstrapped in the Supabase SQL Editor (see README). After that, Super Admins can create additional Admins and promote/demote roles from `/users`.
 
@@ -93,7 +94,7 @@ The admin fills a single form to create an assignment.
 | Article | Searchable select | Required. Sourced from the Supabase article/price table |
 | Quantity assigned | Integer input | Required. Must be ≥ 1 |
 | Size | Dropdown | Required. One of `S`, `M`, `L`, `XL` |
-| Stitching rate (₹) | Read-only display | Auto-filled from the selected article's price. Disabled input, never user-editable |
+| Stitching rate (PKR) | Read-only display | Auto-filled from the selected article's price. Disabled input, never user-editable |
 | Notes | Optional text | Free text, e.g. batch or lot reference |
 
 **Behaviour**
@@ -167,11 +168,11 @@ Available from the employee group header on `/tracking` as a `Print Receipt` but
 - Receipt number and generation date/time.
 - Boutique name/header.
 - Employee name.
-- A table of lines, one per article + size combination: **Article name · Size · Number of pieces completed**.
-- Total pieces on the receipt.
+- A table of lines, one per article + size (+ rate when the same article/size was priced differently across assignments): **Article · Size · Qty · Rate (PKR) · Line total (PKR)**.
+- Total pieces and **total payable (PKR)** on the receipt.
 - Signature blocks for "Handed over by" and "Received by".
 
-**Explicitly excluded:** stitching rate, line value, and any total amount payable. The receipt is a quantity-matching document only.
+**Explicitly excluded:** nothing — amounts are included using the assignment rate snapshotted when the work was handed out.
 
 **Behaviour**
 
@@ -183,14 +184,16 @@ Available from the employee group header on `/tracking` as a `Print Receipt` but
 ### 6.6 Employee Management (`/employees`)
 
 - List of employees with name, contact number (optional), status, and rolled-up open work.
+- **Worked period filter** — optional start and end dates. When both are set, the table shows only employees who had activity in that inclusive range: an assignment created or updated, or a completion recorded.
 - Create and edit an employee.
 - Deactivate an employee — they disappear from new assignment dropdowns but all history is retained. Deactivation is blocked while the employee has remaining pieces, with a clear explanation.
+- **Ledger** (Super Admin only) — a button on each employee row. Opens that employee's weekly earnings view (see 6.9). Admins do not see this control.
 
 ### 6.7 Article and Price Catalogue (`/articles`)
 
 Shared for both roles:
 
-- Table columns: article name, stitching rate (₹), count of open assignment lines, and active/inactive status.
+- Table columns: article name, stitching rate (PKR), count of open assignment lines, and active/inactive status.
 - Informational note: each assignment stores the rate that applied on the day it was created, so a later price change never rewrites past work.
 
 **Admin (read-only)**
@@ -201,7 +204,7 @@ Shared for both roles:
 
 - **Add article** — opens a dialog with:
   - **Name** (required, unique, 1–80 characters)
-  - **Stitching rate (₹)** (required, numeric ≥ 0)
+  - **Stitching rate (PKR)** (required, numeric ≥ 0)
 - **Edit article** — opens the same dialog pre-filled. Name and rate can both be changed.
 - **Deactivate / reactivate** — toggles `is_active`. Deactivated articles disappear from the assignment dropdown but all history is retained. Deactivation is blocked while the article has open assignment lines (remaining quantity > 0), with a clear error message.
 - New articles are immediately available on `/assign` for new assignments.
@@ -238,6 +241,24 @@ Super Admin screen for managing who can sign in to the application. Non–Super 
 
 - The very first Super Admin is still created manually in SQL when the project is first set up. All subsequent Admins are created from the app.
 
+### 6.9 Employee Ledger (Super Admin only)
+
+A running earnings record of completed stitching work, priced at the assignment rate snapshotted when the work was handed out.
+
+**Storage**
+
+- Every completion entry (including reversals) writes a row to `employee_ledger`. The table holds the **full history**, not only the current week.
+- Each ledger row stores employee, completion, assignment, article name, size, quantity, unit price, line amount (`quantity × unit_price`), and the completion date.
+- Rows are written by a database trigger so Admin completions still land in the ledger even though Admins cannot read it. Reversals appear as negative quantity and amount.
+
+**Viewing**
+
+- Super Admin clicks **Ledger** on an employee row on `/employees`.
+- The dialog shows **one calendar week at a time** (Monday–Sunday), defaulting to the current week. Previous and next week controls page through history; next is disabled for future weeks.
+- Contents: per-entry date, article, size, quantity, rate (PKR), and amount (PKR), plus week totals for pieces and payable amount.
+- Empty week: a clear empty state, totals at zero.
+- This is an earnings view of work handed back. It does **not** record money paid to the employee.
+
 ## 7. Data Model
 
 ```mermaid
@@ -249,6 +270,8 @@ erDiagram
     ASSIGNMENTS ||--o{ ASSIGNMENT_ADJUSTMENTS : "topped up by"
     EMPLOYEES ||--o{ RECEIPTS : "issued to"
     RECEIPTS ||--o{ COMPLETION_ENTRIES : "includes"
+    EMPLOYEES ||--o{ EMPLOYEE_LEDGER : "earns"
+    COMPLETION_ENTRIES ||--|| EMPLOYEE_LEDGER : "posts"
 ```
 
 ### 7.1 Tables
@@ -318,6 +341,23 @@ A row is created automatically when a new Auth user is registered. Invited users
 - `total_pieces` integer
 - `created_at` timestamptz
 
+**`employee_ledger`**
+
+- `id` uuid, primary key
+- `employee_id` uuid, references `employees`
+- `completion_entry_id` uuid, unique, references `completion_entries` on delete cascade
+- `assignment_id` uuid, references `assignments`
+- `article_type_id` uuid, references `article_types`
+- `article_name` text — name snapshotted when the completion was posted
+- `size` enum — `S` | `M` | `L` | `XL`
+- `quantity` integer, must be ≠ 0 (negative for reversals)
+- `unit_price` numeric(10,2) — assignment rate at the time of the work
+- `amount` numeric(10,2) — `quantity × unit_price`
+- `occurred_on` date — the completion date
+- `created_at` timestamptz
+
+Populated by a trigger on `completion_entries` (insert and update) and backfilled from existing completions when the schema is applied. Super Admin may `select`; Admins cannot read this table from the app or via RLS.
+
 ### 7.2 Derived Values
 
 Exposed through a database view so the client never recomputes them inconsistently:
@@ -333,6 +373,7 @@ Exposed through a database view so the client never recomputes them inconsistent
 - Row Level Security enabled on every table.
 - Operational tables (`employees`, `assignments`, `completion_entries`, `assignment_adjustments`, `receipts`) grant full access to any authenticated user with a role (`admin` or `super_admin`).
 - `article_types`: `select` for all authenticated users; `insert` and `update` only when `app_users.role = super_admin`.
+- `employee_ledger`: `select` only when `app_users.role = super_admin`. Inserts and updates are performed by a `security definer` trigger, not by the client.
 - `app_users`: each user may `select` their own row; Super Admins may `select` all rows and `update` any row's `role` (subject to app-level safeguards). Creating users uses the Supabase service-role key on the server only.
 - Indexes on `assignments.employee_id`, `assignments.article_type_id`, `completion_entries.assignment_id`, and `completion_entries.receipt_id`.
 
@@ -383,7 +424,7 @@ flowchart TD
 - **Correctness:** quantity arithmetic must never allow completed to exceed assigned, and must never double-count pieces across receipts.
 - **Performance:** tracking page loads within 2 seconds for up to 5,000 assignment lines, using server-side pagination.
 - **Auditability:** completions, adjustments, and receipts are append-only records.
-- **Localisation:** currency displayed as Indian Rupees (₹) with thousands separators; dates in `DD MMM YYYY`.
+- **Localisation:** currency displayed as Pakistani Rupees (PKR) with thousands separators; dates in `DD MMM YYYY`.
 
 ## 11. Success Metrics
 
@@ -417,6 +458,7 @@ Receipt generation, unreceipted-completion scoping, print view, receipt history.
 
 | Version | Date | Change |
 | --- | --- | --- |
+| 0.5 | 31 Aug 2026 | Super Admin employee ledger: full history in `employee_ledger`, weekly earnings view from `/employees` |
 | 0.4 | 29 Aug 2026 | Removed email invites; Super Admin creates admins with email + password (optional auto-generate) and shares credentials manually |
 | 0.3 | 29 Aug 2026 | Super Admin user management: invite Admins by email (credentials + login link via Resend), list users, change roles; `/users` route |
 | 0.2 | 29 Aug 2026 | Super Admin role: full article catalogue management (add, edit rates, deactivate); Admin retains read-only catalogue access and all operational features |

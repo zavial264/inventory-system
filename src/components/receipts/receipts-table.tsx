@@ -14,8 +14,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDateTime } from "@/lib/format";
+import { formatCurrency, formatDateTime } from "@/lib/format";
 import { useInventory } from "@/lib/store/inventory-provider";
+import type { ReceiptLine } from "@/lib/types";
+
+function lineTotal(line: ReceiptLine) {
+  if (line.lineTotal != null) return line.lineTotal;
+  if (line.unitPrice != null) return line.quantity * line.unitPrice;
+  return null;
+}
 
 export function ReceiptsTable() {
   const { state } = useInventory();
@@ -45,6 +52,7 @@ export function ReceiptsTable() {
             <TableHead>Employee</TableHead>
             <TableHead>Articles</TableHead>
             <TableHead className="w-24 text-right">Pieces</TableHead>
+            <TableHead className="w-32 text-right">Total</TableHead>
             <TableHead className="w-44">Issued</TableHead>
             <TableHead className="w-px text-right">Actions</TableHead>
           </TableRow>
@@ -65,6 +73,18 @@ export function ReceiptsTable() {
               </TableCell>
               <TableCell className="tabular text-right font-medium">
                 {receipt.totalPieces}
+              </TableCell>
+              <TableCell className="tabular text-right font-medium">
+                {receipt.totalAmount != null
+                  ? formatCurrency(receipt.totalAmount)
+                  : receipt.snapshot.lines.some((line) => lineTotal(line) != null)
+                    ? formatCurrency(
+                        receipt.snapshot.lines.reduce(
+                          (total, line) => total + (lineTotal(line) ?? 0),
+                          0,
+                        ),
+                      )
+                    : "—"}
               </TableCell>
               <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                 {formatDateTime(receipt.createdAt)}

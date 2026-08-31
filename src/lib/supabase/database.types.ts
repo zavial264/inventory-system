@@ -77,6 +77,22 @@ type ReceiptRow = {
   employee_id: string;
   snapshot: Json;
   total_pieces: number;
+  total_amount: number | null;
+  created_at: string;
+};
+
+type EmployeeLedgerRow = {
+  id: string;
+  employee_id: string;
+  completion_entry_id: string;
+  assignment_id: string;
+  article_type_id: string;
+  article_name: string;
+  size: ArticleSize;
+  quantity: number;
+  unit_price: number;
+  amount: number;
+  occurred_on: string;
   created_at: string;
 };
 
@@ -141,9 +157,16 @@ export type Database = {
       };
       receipts: {
         Row: ReceiptRow;
-        Insert: Partial<Pick<ReceiptRow, "id" | "created_at">> &
+        Insert: Partial<Pick<ReceiptRow, "id" | "created_at" | "total_amount">> &
           Pick<ReceiptRow, "receipt_no" | "employee_id" | "snapshot" | "total_pieces">;
         Update: Partial<ReceiptRow>;
+        Relationships: [];
+      };
+      employee_ledger: {
+        Row: EmployeeLedgerRow;
+        Insert: Partial<Pick<EmployeeLedgerRow, "id" | "created_at">> &
+          Omit<EmployeeLedgerRow, "id" | "created_at">;
+        Update: Partial<EmployeeLedgerRow>;
         Relationships: [];
       };
     };
