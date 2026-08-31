@@ -2,9 +2,18 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+function Table({
+  className,
+  containerClassName,
+  ...props
+}: React.ComponentProps<"table"> & { containerClassName?: string }) {
   return (
-    <div className="relative w-full overflow-x-auto">
+    <div
+      className={cn(
+        "relative w-full",
+        containerClassName ?? "overflow-x-auto",
+      )}
+    >
       <table
         data-slot="table"
         className={cn("w-full caption-bottom text-sm", className)}
@@ -14,11 +23,20 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
   );
 }
 
-function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
+function TableHeader({
+  className,
+  sticky = false,
+  ...props
+}: React.ComponentProps<"thead"> & { sticky?: boolean }) {
   return (
     <thead
       data-slot="table-header"
-      className={cn("[&_tr]:border-b [&_tr]:border-border", className)}
+      className={cn(
+        "[&_tr]:border-b [&_tr]:border-border",
+        sticky &&
+          "sticky top-0 z-10 bg-muted [&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-muted",
+        className,
+      )}
       {...props}
     />
   );

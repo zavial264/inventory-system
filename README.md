@@ -67,7 +67,7 @@ The app runs at http://localhost:3000 and redirects to the login screen.
 - Components read that snapshot through `useInventory()` and call server actions in `src/lib/data/actions.ts` to change anything.
 - Actions validate with the same Zod schemas the forms use, then revalidate, so a fresh snapshot streams back without any client-side cache to keep in sync.
 
-Stitching rates are read-only for **Admin** users. **Super Admin** users can add articles and edit rates on `/articles`, create or manage platform users on `/users`, and open an employee's weekly earnings ledger from `/employees`.
+Stitching rates are read-only for **Admin** users. **Super Admin** users can add articles and edit rates on `/articles`, create or manage platform users on `/users`, and open an employee's earnings ledger (up to 30 days) from `/employees`.
 
 ### Adding admins (Super Admin)
 
@@ -83,10 +83,10 @@ Stitching rates are read-only for **Admin** users. **Super Admin** users can add
 | `/login` | Admin sign-in |
 | `/tracking` | Assignments grouped by employee, with completions and receipt generation |
 | `/assign` | Create an assignment |
-| `/employees` | Manage tailors (Super Admin also opens a weekly earnings ledger per employee) |
+| `/employees` | Manage tailors (Super Admin also opens an earnings ledger of up to 30 days per employee) |
 | `/articles` | Article catalogue (read-only for Admin; full management for Super Admin) |
 | `/users` | Create admins and manage roles (Super Admin only) |
-| `/receipts` | Receipt history |
+| `/receipts` | Receipt history (search by employee, date filter, 50 per page) |
 | `/receipts/[id]/print` | Printable handover slip |
 
 ## Key rules, and where they are enforced

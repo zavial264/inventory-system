@@ -1,7 +1,7 @@
 # Boutique Inventory System — Product Requirements Document
 
-- **Version:** 0.5 (Draft)
-- **Last updated:** 31 Aug 2026
+- **Version:** 0.7 (Draft)
+- **Last updated:** 1 Sep 2026
 - **Owner:** Product owner (boutique admin)
 - **Status:** Approved scope for v1 build
 
@@ -38,7 +38,7 @@ A boutique distributes cut fabric pieces to stitching employees (tailors) and cu
 
 ### 3.2 Non-Goals (v1)
 
-- Payment settlement or wage disbursement (money paid out). Super Admin can view a weekly earnings ledger of completed stitching work; that is not a payroll or payout record.
+- Payment settlement or wage disbursement (money paid out). Super Admin can view an earnings ledger of completed stitching work for a date range of up to 30 days; that is not a payroll or payout record.
 - Raw material / fabric stock management.
 - Customer orders, sales, or billing.
 - Employee-facing logins or a mobile app.
@@ -63,7 +63,7 @@ Authentication is Supabase Auth (email + password). All application routes are p
 | View platform users (`/users`) | — | ✓ |
 | Create new Admin users (`/users`) | — | ✓ |
 | Change another user's role (Admin ↔ Super Admin) | — | ✓ |
-| View an employee's weekly earnings ledger | — | ✓ |
+| View an employee's earnings ledger (up to 30 days) | — | ✓ |
 
 **Admin** — day-to-day boutique operations: hand out work, track returns, manage tailors, and issue receipts. Cannot change the article catalogue, pricing, or platform users from the app. Admins are created by a Super Admin from `/users`.
 
@@ -179,15 +179,17 @@ Available from the employee group header on `/tracking` as a `Print Receipt` but
 - Generating a receipt persists it and stamps the included completion entries with its ID, so they are excluded from future receipts.
 - Opens a clean, print-optimised A5/A4 view and triggers the browser print dialog.
 - A `/receipts` list allows re-printing any past receipt. Re-prints render the original stored snapshot, not recomputed data.
+- The list can be searched by employee name and filtered by issued date with **Starting from** and **Ending** (inclusive; either or both dates). Results are paginated at 50 receipts per page.
 - If an employee has no unreceipted completions, the button is disabled with an explanatory tooltip.
 
 ### 6.6 Employee Management (`/employees`)
 
 - List of employees with name, contact number (optional), status, and rolled-up open work.
 - **Worked period filter** — optional start and end dates. When both are set, the table shows only employees who had activity in that inclusive range: an assignment created or updated, or a completion recorded.
+- Results are paginated at 50 employees per page.
 - Create and edit an employee.
 - Deactivate an employee — they disappear from new assignment dropdowns but all history is retained. Deactivation is blocked while the employee has remaining pieces, with a clear explanation.
-- **Ledger** (Super Admin only) — a button on each employee row. Opens that employee's weekly earnings view (see 6.9). Admins do not see this control.
+- **Ledger** (Super Admin only) — a button on each employee row. Opens that employee's earnings view for a chosen date range of up to 30 days (see 6.9). Admins do not see this control.
 
 ### 6.7 Article and Price Catalogue (`/articles`)
 
@@ -254,9 +256,10 @@ A running earnings record of completed stitching work, priced at the assignment 
 **Viewing**
 
 - Super Admin clicks **Ledger** on an employee row on `/employees`.
-- The dialog shows **one calendar week at a time** (Monday–Sunday), defaulting to the current week. Previous and next week controls page through history; next is disabled for future weeks.
-- Contents: per-entry date, article, size, quantity, rate (PKR), and amount (PKR), plus week totals for pieces and payable amount.
-- Empty week: a clear empty state, totals at zero.
+- The dialog uses the same **Worked from** / **Worked to** date filter as the employees table. The inclusive range may be **at most 30 days**. The default is the last 7 days (including today). Future dates cannot be chosen. If the chosen start date would make the range longer than 30 days, the end date is pulled in.
+- The database still keeps the **full history**; this view only loads the selected window.
+- Contents: per-entry date, article, size, quantity, rate (PKR), and amount (PKR), plus totals for pieces and payable amount in the selected range.
+- Empty period: a clear empty state, totals at zero.
 - This is an earnings view of work handed back. It does **not** record money paid to the employee.
 
 ## 7. Data Model
@@ -458,6 +461,8 @@ Receipt generation, unreceipted-completion scoping, print view, receipt history.
 
 | Version | Date | Change |
 | --- | --- | --- |
+| 0.7 | 1 Sep 2026 | Receipts: employee search, Starting from / Ending date filters, 50-per-page pagination; employees table paginated at 50 per page |
+| 0.6 | 1 Sep 2026 | Ledger date filter matches employees table; Super Admin can view at most 30 days at a time |
 | 0.5 | 31 Aug 2026 | Super Admin employee ledger: full history in `employee_ledger`, weekly earnings view from `/employees` |
 | 0.4 | 29 Aug 2026 | Removed email invites; Super Admin creates admins with email + password (optional auto-generate) and shares credentials manually |
 | 0.3 | 29 Aug 2026 | Super Admin user management: invite Admins by email (credentials + login link via Resend), list users, change roles; `/users` route |

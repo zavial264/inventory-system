@@ -31,6 +31,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  TablePagination,
+  useClientPagination,
+} from "@/components/ui/table-pagination";
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -101,6 +105,8 @@ export function EmployeesTable() {
     workedTo,
   ]);
 
+  const pagination = useClientPagination(rows);
+
   const toggleActive = async (employee: Employee) => {
     const result = await setEmployeeActive(employee.id, !employee.isActive);
     if (!result.ok) {
@@ -117,19 +123,23 @@ export function EmployeesTable() {
   const clearPeriod = () => {
     setWorkedFrom("");
     setWorkedTo("");
+    pagination.resetPage();
   };
 
   const dateFilterActive = workedFrom !== "" || workedTo !== "";
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <div className="flex shrink-0 flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="relative sm:w-64">
             <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                pagination.resetPage();
+              }}
               placeholder="Search employees"
               aria-label="Search employees"
               className="pl-9"
@@ -144,7 +154,10 @@ export function EmployeesTable() {
               <DateInput
                 id="worked-from"
                 value={workedFrom}
-                onValueChange={setWorkedFrom}
+                onValueChange={(next) => {
+                  setWorkedFrom(next);
+                  pagination.resetPage();
+                }}
                 max={workedTo || undefined}
                 placeholder="Start date"
                 className="w-44"
@@ -158,7 +171,10 @@ export function EmployeesTable() {
               <DateInput
                 id="worked-to"
                 value={workedTo}
-                onValueChange={setWorkedTo}
+                onValueChange={(next) => {
+                  setWorkedTo(next);
+                  pagination.resetPage();
+                }}
                 min={workedFrom || undefined}
                 placeholder="End date"
                 className="w-44"
@@ -191,11 +207,11 @@ export function EmployeesTable() {
       </div>
 
       {periodInvalid ? (
-        <p className="text-sm text-destructive">
+        <p className="shrink-0 text-sm text-destructive">
           The start date must be on or before the end date.
         </p>
       ) : periodFilterActive ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="shrink-0 text-sm text-muted-foreground">
           Employees with assignments or completions between{" "}
           {formatDate(workedFrom)} and {formatDate(workedTo)}.
         </p>
@@ -216,22 +232,24 @@ export function EmployeesTable() {
                 ? "Try a different date range or clear the date filter."
                 : "Add the tailors you work with to start assigning articles."
           }
+          className="min-h-0 flex-1"
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/40">
-                <TableHead>Employee</TableHead>
-                <TableHead className="w-40">Phone</TableHead>
-                <TableHead className="w-28 text-right">Open lines</TableHead>
-                <TableHead className="w-32 text-right">Pending pieces</TableHead>
-                <TableHead className="w-28">Status</TableHead>
-                <TableHead className="w-px text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <Table containerClassName="min-h-0 flex-1 overflow-auto">
+              <TableHeader sticky>
+                <TableRow>
+                  <TableHead>Employee</TableHead>
+                  <TableHead className="w-40">Phone</TableHead>
+                  <TableHead className="w-28 text-right">Open lines</TableHead>
+                  <TableHead className="w-32 text-right">Pending pieces</TableHead>
+                  <TableHead className="w-28">Status</TableHead>
+                  <TableHead className="w-px text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
             <TableBody>
-              {rows.map(({ employee, openLines, remaining }) => (
+              {pagination.items.map(({ employee, openLines, remaining }) => (
                 <TableRow key={employee.id}>
                   <TableCell>
                     <div className="flex items-center gap-3">
@@ -321,6 +339,17 @@ export function EmployeesTable() {
               ))}
             </TableBody>
           </Table>
+          </div>
+          <div className="shrink-0">
+            <TablePagination
+              page={pagination.page}
+              pageCount={pagination.pageCount}
+              rangeFrom={pagination.rangeFrom}
+              rangeTo={pagination.rangeTo}
+              total={pagination.total}
+              onPageChange={pagination.setPage}
+            />
+          </div>
         </div>
       )}
 

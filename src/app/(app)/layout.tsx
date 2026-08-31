@@ -25,11 +25,11 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
 
   return (
     <InventoryProvider snapshot={snapshot} userRole={userRole}>
-      <div className="flex min-h-svh items-start">
+      <div className="flex h-svh overflow-hidden">
         <AppSidebar userEmail={user.email ?? "admin"} userRole={userRole} />
-        <div className="flex min-h-svh min-w-0 flex-1 flex-col">
+        <div className="flex h-svh min-w-0 flex-1 flex-col overflow-hidden">
           <MobileNav userRole={userRole} />
-          <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-5 sm:px-5 lg:px-6 lg:py-6">
+          <main className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col overflow-y-auto px-4 py-5 sm:px-5 lg:px-6 lg:py-6">
             {children}
           </main>
         </div>

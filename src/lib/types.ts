@@ -108,11 +108,11 @@ export type LedgerEntry = {
   createdAt: string;
 };
 
-export type EmployeeWeekLedger = {
+export type EmployeeLedger = {
   employeeId: string;
   employeeName: string;
-  weekStart: string;
-  weekEnd: string;
+  from: string;
+  to: string;
   entries: LedgerEntry[];
   totalPieces: number;
   totalAmount: number;

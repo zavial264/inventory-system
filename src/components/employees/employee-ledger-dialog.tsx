@@ -2,15 +2,15 @@
 
 import * as React from "react";
 import {
-  ChevronLeftIcon,
-  ChevronRightIcon,
   CoinsIcon,
   Loader2Icon,
   ScrollTextIcon,
   ShirtIcon,
+  XIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { DateInput } from "@/components/ui/date-input";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Label } from "@/components/ui/label";
 import { StatCard } from "@/components/ui/stat-card";
 import {
   Table,
@@ -28,16 +29,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getEmployeeWeekLedgerAction } from "@/lib/data/ledger-actions";
+import { getEmployeeLedgerAction } from "@/lib/data/ledger-actions";
+import { formatCurrency, formatDate, formatNumber, toDateInputValue } from "@/lib/format";
 import {
-  addDaysIso,
-  formatCurrency,
-  formatDate,
-  formatNumber,
-  startOfWeekMonday,
-} from "@/lib/format";
+  LEDGER_MAX_DAYS,
+  constrainLedgerFrom,
+  constrainLedgerTo,
+  defaultLedgerRange,
+  latestLedgerTo,
+} from "@/lib/ledger";
 import { cn } from "@/lib/utils";
-import type { Employee, EmployeeWeekLedger } from "@/lib/types";
+import type { Employee, EmployeeLedger } from "@/lib/types";
 
 export function EmployeeLedgerDialog({
   employee,
@@ -48,9 +50,11 @@ export function EmployeeLedgerDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const currentWeekStart = startOfWeekMonday();
-  const [weekStart, setWeekStart] = React.useState(currentWeekStart);
-  const [ledger, setLedger] = React.useState<EmployeeWeekLedger | null>(null);
+  const today = toDateInputValue();
+  const defaults = defaultLedgerRange(today);
+  const [from, setFrom] = React.useState(defaults.from);
+  const [to, setTo] = React.useState(defaults.to);
+  const [ledger, setLedger] = React.useState<EmployeeLedger | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
 
@@ -59,7 +63,7 @@ export function EmployeeLedgerDialog({
 
     let cancelled = false;
 
-    getEmployeeWeekLedgerAction(employee.id, weekStart).then((result) => {
+    getEmployeeLedgerAction(employee.id, from, to).then((result) => {
       if (cancelled) return;
       setLoading(false);
       if (!result.ok) {
@@ -74,61 +78,95 @@ export function EmployeeLedgerDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, employee, weekStart]);
+  }, [open, employee, from, to]);
 
-  const shiftWeek = (days: number) => {
-    setWeekStart((current) => addDaysIso(current, days));
+  const applyRange = (next: { from: string; to: string }) => {
+    if (next.from === from && next.to === to) return;
+    setFrom(next.from);
+    setTo(next.to);
     setLoading(true);
     setError(null);
     setLedger(null);
   };
 
-  const canGoNext = weekStart < currentWeekStart;
+  const resetDates = () => {
+    applyRange(defaultLedgerRange());
+  };
+
+  const dateFilterActive = from !== defaults.from || to !== defaults.to;
   const titleName = ledger?.employeeName ?? employee?.name ?? "Employee";
+  const toMax = latestLedgerTo(from, today);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[min(36rem,calc(100dvh-2rem))] max-w-3xl flex-col gap-5">
+      <DialogContent className="flex h-[min(38rem,calc(100dvh-2rem))] max-w-3xl flex-col gap-5">
         <DialogHeader className="shrink-0">
           <DialogTitle>Ledger · {titleName}</DialogTitle>
           <DialogDescription>
-            Completed stitching for one week, priced at the assignment rate.
-            The database keeps the full history; this view is week by week.
+            Completed stitching priced at the assignment rate. Choose up to{" "}
+            {LEDGER_MAX_DAYS} days.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-1">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon-sm"
-              aria-label="Previous week"
-              disabled={loading}
-              onClick={() => shiftWeek(-7)}
-            >
-              <ChevronLeftIcon />
-            </Button>
-            <p className="min-w-48 px-2 text-center text-sm font-medium">
-              {formatDate(weekStart)} – {formatDate(addDaysIso(weekStart, 6))}
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon-sm"
-              aria-label="Next week"
-              disabled={loading || !canGoNext}
-              onClick={() => shiftWeek(7)}
-            >
-              <ChevronRightIcon />
-            </Button>
+        <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="ledger-from" className="text-xs">
+                Worked from
+              </Label>
+              <DateInput
+                id="ledger-from"
+                value={from}
+                onValueChange={(next) => {
+                  if (!next) return;
+                  applyRange(constrainLedgerFrom(next, to));
+                }}
+                max={today}
+                required
+                placeholder="Start date"
+                className="w-44"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="ledger-to" className="text-xs">
+                Worked to
+              </Label>
+              <DateInput
+                id="ledger-to"
+                value={to}
+                onValueChange={(next) => {
+                  if (!next) return;
+                  applyRange(constrainLedgerTo(from, next));
+                }}
+                min={from}
+                max={toMax}
+                required
+                placeholder="End date"
+                className="w-44"
+              />
+            </div>
+
+            {dateFilterActive ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 gap-1.5 border-input text-muted-foreground hover:text-foreground"
+                onClick={resetDates}
+              >
+                <XIcon className="size-3.5" />
+                Clear date filter
+              </Button>
+            ) : null}
           </div>
-          <p className="text-xs text-muted-foreground">Monday – Sunday</p>
+          <p className="text-xs text-muted-foreground">
+            {formatDate(from)} – {formatDate(to)} · max {LEDGER_MAX_DAYS} days
+          </p>
         </div>
 
         <div className="grid shrink-0 gap-3 sm:grid-cols-2">
           <StatCard
-            label="Pieces this week"
+            label="Pieces"
             value={loading ? "—" : formatNumber(ledger?.totalPieces ?? 0)}
             icon={ShirtIcon}
           />
@@ -157,50 +195,60 @@ export function EmployeeLedgerDialog({
           ) : !ledger || ledger.entries.length === 0 ? (
             <EmptyState
               icon={ScrollTextIcon}
-              title="No completed work this week"
-              description="Completions recorded for this employee will appear here. Try another week if they worked earlier."
+              title="No completed work in this period"
+              description="Completions recorded for this employee will appear here. Try a different date range of up to 30 days."
               className="min-h-0 flex-1 border-0 py-0"
             />
           ) : (
-            <div className="min-h-0 flex-1 overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/40">
-                    <TableHead>Date</TableHead>
-                    <TableHead>Article</TableHead>
-                    <TableHead>Size</TableHead>
-                    <TableHead className="text-right">Qty</TableHead>
-                    <TableHead className="text-right">Rate</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
+            <Table containerClassName="min-h-0 flex-1 overflow-auto">
+              <TableHeader className="sticky top-0 z-10">
+                <TableRow className="border-b border-border hover:bg-muted">
+                  <TableHead className="sticky top-0 z-10 bg-muted">
+                    Date
+                  </TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-muted">
+                    Article
+                  </TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-muted">
+                    Size
+                  </TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-muted text-right">
+                    Qty
+                  </TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-muted text-right">
+                    Rate
+                  </TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-muted text-right">
+                    Amount
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {ledger.entries.map((entry) => (
+                  <TableRow
+                    key={entry.id}
+                    className={cn(
+                      entry.quantity < 0 && "text-muted-foreground",
+                    )}
+                  >
+                    <TableCell className="whitespace-nowrap">
+                      {formatDate(entry.occurredOn)}
+                    </TableCell>
+                    <TableCell>{entry.articleName}</TableCell>
+                    <TableCell>{entry.size}</TableCell>
+                    <TableCell className="tabular text-right">
+                      {formatNumber(entry.quantity)}
+                    </TableCell>
+                    <TableCell className="tabular text-right text-muted-foreground">
+                      {formatCurrency(entry.unitPrice)}
+                    </TableCell>
+                    <TableCell className="tabular text-right font-medium">
+                      {formatCurrency(entry.amount)}
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {ledger.entries.map((entry) => (
-                    <TableRow
-                      key={entry.id}
-                      className={cn(
-                        entry.quantity < 0 && "text-muted-foreground",
-                      )}
-                    >
-                      <TableCell className="whitespace-nowrap">
-                        {formatDate(entry.occurredOn)}
-                      </TableCell>
-                      <TableCell>{entry.articleName}</TableCell>
-                      <TableCell>{entry.size}</TableCell>
-                      <TableCell className="tabular text-right">
-                        {formatNumber(entry.quantity)}
-                      </TableCell>
-                      <TableCell className="tabular text-right text-muted-foreground">
-                        {formatCurrency(entry.unitPrice)}
-                      </TableCell>
-                      <TableCell className="tabular text-right font-medium">
-                        {formatCurrency(entry.amount)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </div>
       </DialogContent>

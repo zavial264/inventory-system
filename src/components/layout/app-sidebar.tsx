@@ -103,7 +103,7 @@ export function MobileNav({ userRole }: { userRole: AppRole }) {
   const items = navItemsForRole(userRole);
 
   return (
-    <div className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur lg:hidden">
+    <div className="sticky top-0 z-30 shrink-0 border-b border-border bg-background/85 backdrop-blur lg:hidden">
       <div className="flex items-center gap-2 px-4 py-3">
         <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
           {BRAND.initials}
